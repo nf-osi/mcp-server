@@ -1,9 +1,4 @@
-(ns my-mcp.tools
-  (:require [accent.registry :as registry]
-            [cheshire.core :as json]
-            [clojure.java.io :as io]))
-
-(ns my-mcp.tools
+(ns nfosi.tools
   (:require [accent.registry :as registry]
             [cheshire.core :as json]
             [clj-http.client :as http]
@@ -14,7 +9,7 @@
 ;; =============================================================================
 
 ;; Configuration
-(def ^:dynamic *schematic-api-base-url* "https://schematic-api.example.com/v1")
+(def ^:dynamic *schematic-api-base-url* "http://schematic.api.sagebionetworks.org/v1")
 (def ^:dynamic *auth-token* nil)
 
 (defn make-api-request
