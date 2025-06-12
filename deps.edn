@@ -1,5 +1,5 @@
 {:paths ["src" "resources"]
- :deps {org.clojure/clojure {:mvn/version "1.12.1"}
+ :deps {org.clojure/clojure {:mvn/version "1.11.1"}
         org.sagebionetworks/synapseJavaClient {:mvn/version "500.0"
                                                :repos ["sagebionetworks-artifactory"]}
         clj-http/clj-http {:mvn/version "3.13.0"}
