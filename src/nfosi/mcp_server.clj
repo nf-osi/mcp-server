@@ -1,12 +1,32 @@
 (ns nfosi.mcp-server
-  (:gen-class))
+  (:gen-class)
+  (:require [accent.state :refer [setup u]]
+            [accent.registry :refer [tool-registry tools->mcp-format]]
+            [accent.tools] ; Load accent's built-in, general tools
+            [nfosi.tools] ; Load NF-only custom tools
+            [curate.synapse :refer [new-syn]]
+            [io.modelcontext.clojure-sdk.stdio-server :as io-server]
+            [com.brunobonacci.mulog :as mu]))
 
-(defn greet
-  "Callable entry point to the application."
-  [data]
-  (println (str "Hello, " (or (:name data) "World") "!")))
+(defn get-all-tools
+  "Get all tools from the registry in MCP format"
+  []
+  (-> @tool-registry
+      (tools->mcp-format)))
+
+(def my-server-spec
+  {:name "NF-OSI MCP Server"
+   :version "1.0.0"
+   :tools (get-all-tools)
+   })
 
 (defn -main
-  "I don't do a whole lot ... yet."
   [& args]
-  (greet {:name (first args)}))
+  ;; Initialize state
+  (setup {:ui :external-client})
+  (new-syn (@u :sat))
+
+  ;; Start MCP server
+  (let [server-id (random-uuid)]
+    (mu/log ::my-mcp-server :info (str "Starting custom MCP server " server-id))
+    @(io-server/run! (assoc my-server-spec :server-id server-id))))
