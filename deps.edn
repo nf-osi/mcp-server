@@ -1,0 +1,18 @@
+{:paths ["src" "resources"]
+ :deps {org.clojure/clojure {:mvn/version "1.12.1"}
+        org.sagebionetworks/synapseJavaClient {:mvn/version "500.0"
+                                               :repos ["sagebionetworks-artifactory"]}
+        com.github.anngvu/accent {:git/url "https://github.com/anngvu/accent"
+                                  :git/sha "b34cf257c1c05b3405ec6a82efc2bd4f5f2c3571"}}
+ :mvn/repos {"sagebionetworks-artifactory" {:url "https://sagebionetworks.jfrog.io/artifactory/libs-releases-local/"}}
+ :aliases
+ {:run-m {:main-opts ["-m" "nfosi.mcp-server"]}
+  :run-x {:ns-default nfosi.mcp-server
+          :exec-fn greet
+          :exec-args {:name "Clojure"}}
+  :build {:deps {io.github.clojure/tools.build
+                 {:mvn/version "0.10.9"}}
+          :ns-default build}
+  :test {:extra-paths ["test"]
+         :extra-deps {org.clojure/test.check {:mvn/version "1.1.1"}
+                      io.github.cognitect-labs/test-runner {:git/tag "v0.5.1" :git/sha "dfb30dd"}}}}}
