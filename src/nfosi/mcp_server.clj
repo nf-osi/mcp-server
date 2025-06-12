@@ -30,5 +30,5 @@
 
   ;; Start MCP server
   (let [server-id (random-uuid)]
-    (mu/log ::my-mcp-server :info (str "Starting custom MCP server " server-id))
+    (mu/log ::nfosi-mcp-server :info (str "Starting NF-OSI MCP server " server-id))
     @(io-server/run! (assoc my-server-spec :server-id server-id))))
