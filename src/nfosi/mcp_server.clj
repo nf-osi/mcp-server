@@ -16,7 +16,7 @@
 
 (def my-server-spec
   {:name "NF-OSI MCP Server"
-   :version "1.0.0"
+   :version "0.1.0"
    :tools (get-all-tools)
    })
 
