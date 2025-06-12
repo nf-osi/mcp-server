@@ -25,6 +25,8 @@
   ;; Initialize state
   (setup {:ui :external-client})
   (new-syn (@u :sat))
+  (alter-var-root #'nfosi.tools/*schematic-auth-token*
+                  (constantly (@u :sat)))
 
   ;; Start MCP server
   (let [server-id (random-uuid)]

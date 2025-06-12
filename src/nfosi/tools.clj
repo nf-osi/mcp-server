@@ -9,8 +9,8 @@
 ;; =============================================================================
 
 ;; Configuration
-(def ^:dynamic *schematic-api-base-url* "http://schematic.api.sagebionetworks.org/v1")
-(def ^:dynamic *auth-token* nil)
+(def ^:dynamic *schematic-api-base-url* "https://schematic.api.sagebionetworks.org/v1")
+(def ^:dynamic *schematic-auth-token* nil)
 
 (defn make-api-request
   "Helper function to make HTTP requests to the Schematic API"
@@ -18,7 +18,7 @@
   (try
     (let [url (str *schematic-api-base-url* endpoint)
           headers (cond-> {"Content-Type" "application/json"}
-                    *auth-token* (assoc "Authorization" (str "Bearer " *auth-token*)))
+                    *schematic-auth-token* (assoc "Authorization" (str "Bearer " *schematic-auth-token*)))
           request-opts (cond-> {:headers headers
                                 :throw-exceptions false}
                          (= method :get) (assoc :query-params params)
