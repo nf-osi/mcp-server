@@ -1,0 +1,54 @@
+name: Build and Release Uberjar
+
+on:
+  push:
+    tags:
+      - '*'
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    
+    steps:
+      - uses: actions/checkout@v4
+      
+      - name: Setup Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: 'temurin'
+          java-version: '17'
+          
+      - name: Install Clojure
+        uses: DeLaGuardo/setup-clojure@13.0
+        with: 
+          cli: 1.12.0.1530
+          bb: 0.7.8
+          
+      - name: Build uberjar
+        run: clojure -T:build uber
+        
+      - name: Create Release
+        id: create_release
+        uses: actions/create-release@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          tag_name: ${{ github.ref }}
+          release_name: ${{ github.ref }}
+          draft: false
+          prerelease: ${{ contains(github.ref, 'alpha') || contains(github.ref, 'beta') || contains(github.ref, 'rc') || contains(github.ref, 'dev') || contains(github.ref, 'test')  || contains(github.ref, 'experimental') }}
+      
+      - name: Get artifact path
+        id: get_artifact
+        run: |
+          echo "artifact_path=$(ls ./target/nfosi/mcp-server.jar)" >> $GITHUB_OUTPUT
+
+      - name: Upload Release Asset
+        uses: actions/upload-release-asset@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          upload_url: ${{ steps.create_release.outputs.upload_url }}
+          asset_path: ${{ steps.get_artifact.outputs.artifact_path }}
+          asset_name: mcp-server-${{ github.ref_name }}.jar
+          asset_content_type: application/java-archive
