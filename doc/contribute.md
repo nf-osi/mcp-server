@@ -15,7 +15,7 @@ Prompts are meant for more standardized and reusable workflows; in fact, many NF
 Prompts can be added to `src/nfosi/prompts.clj`, where any current examples can also be viewed. 
 To contribute, first create a https://github.com/nf-osi/mcp-server/labels/prompt issue describing the prompt concept, as comments can help refine the prompt (perhaps even more so than for tools).
 
-When developing a prompt, one may realize it ideally uses a tool that is not yet available. In that case, go through the tool contribution process as well.
+When developing a prompt, one may realize it ideally uses a tool/resource that is not yet available. In that case, go through the tool/resource contribution process as well.
 
 ## Adding resources
 
