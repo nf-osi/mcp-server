@@ -5,7 +5,8 @@
         clj-http/clj-http {:mvn/version "3.13.0"}
         cheshire/cheshire {:mvn/version "5.12.0"}
         com.github.anngvu/accent {:git/url "https://github.com/anngvu/accent"
-                                  :git/sha "06d3d530108e1fef35614add151d3ec4019cde17"}}
+                                  :git/tag "v0.7.2"
+                                  :git/sha "f6f6069"}}
  :mvn/repos {"sagebionetworks-artifactory" {:url "https://sagebionetworks.jfrog.io/artifactory/libs-releases-local/"}}
  :aliases
  {:run-m {:main-opts ["-m" "nfosi.mcp-server"]}
