@@ -6,7 +6,7 @@
 (def version "0.1.0")
 (def main 'nfosi.mcp-server)
 (def class-dir "target/classes")
-(def uber-file (format "target/%s-%s.jar" lib version))
+(def uber-file (format "target/%s.jar" lib))
 
 (def basis (delay (b/create-basis {:project "deps.edn"})))
 
