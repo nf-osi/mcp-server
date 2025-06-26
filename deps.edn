@@ -10,9 +10,6 @@
  :mvn/repos {"sagebionetworks-artifactory" {:url "https://sagebionetworks.jfrog.io/artifactory/libs-releases-local/"}}
  :aliases
  {:run-m {:main-opts ["-m" "nfosi.mcp-server"]}
-  :run-x {:ns-default nfosi.mcp-server
-          :exec-fn greet
-          :exec-args {:name "Clojure"}}
   :build {:deps {io.github.clojure/tools.build
                  {:mvn/version "0.10.9"}}
           :ns-default build}
