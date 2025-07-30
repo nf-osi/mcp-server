@@ -5,6 +5,8 @@ This builds on top of [accent](https://github.com/anngvu/accent) so Synapse tool
 
 ## Pairings
 
-Other MCP servers that should synergize with this MCP server:
+This is likely only one of multiple servers that would be added to your configuration.
+**To be productive, your AI assistant would need to have access to the other tools already integral in your day-to-day NF work, which at minimum are:**  
 
-- [GitHub's official MCP server](https://github.com/github/github-mcp-server)
+- git/GitHub with [GitHub's official MCP server](https://github.com/github/github-mcp-server)
+- Jira with [Jira's official MCP server](https://support.atlassian.com/rovo/docs/getting-started-with-the-atlassian-remote-mcp-server/)
