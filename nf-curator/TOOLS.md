@@ -1,0 +1,326 @@
+# MCP Tools Reference
+
+This document describes all tools available in the NF Curator MCP server and their usage across different recipes.
+
+## Tool Categories
+
+### 🔬 Portal Metadata Tools
+Used by `recipe_release.yaml` for generating and submitting dataset metadata.
+
+#### `synapse_query`
+Execute SQL queries against Synapse dataset tables to extract metadata.
+
+**Parameters:**
+- `table_id` (string, required) - Synapse table ID (e.g., syn12345678)
+- `query` (string, required) - SQL query string (use `<table_id>` as placeholder)
+
+**Returns:** JSON with row_count, columns, and data
+
+**Example:**
+```python
+{
+  "table_id": "syn51234567",
+  "query": "SELECT DISTINCT assay FROM <table_id>"
+}
+```
+
+#### `fetch_schema`
+Fetch a JSON schema from the NF metadata dictionary. Supports multiple schema types.
+
+**Parameters:**
+- `schema_name` (string, optional) - Schema name: "PortalDataset" (default), "PortalPublication", etc.
+- `schema_url` (string, optional) - Full URL to schema (overrides schema_name if provided)
+
+**Returns:** Complete JSON schema definition
+
+**Examples:**
+```python
+# Default: Fetch PortalDataset schema
+fetch_schema({})
+
+# Fetch specific schema by name
+fetch_schema({"schema_name": "PortalPublication"})
+
+# Fetch from custom URL
+fetch_schema({"schema_url": "https://example.com/custom-schema.json"})
+```
+
+**Common Schema Names:**
+- `PortalDataset` - Dataset metadata (default)
+- `PortalPublication` - Publication metadata
+- `PortalStudy` - Study-level metadata
+
+#### `validate_metadata`
+Validate metadata JSON against a saved schema file.
+
+**Parameters:**
+- `metadata` (object, required) - JSON metadata to validate
+- `schema_file` (string, required) - Path to saved schema file (e.g., "PortalDataset.json")
+
+**Returns:** Validation results with errors, warnings, and completeness score
+
+**Example:**
+```python
+# First, fetch and save the schema
+fetch_schema({"save_to_file": "PortalDataset.json"})
+
+# Then validate metadata using the saved schema
+validate_metadata({
+  "metadata": {...},
+  "schema_file": "PortalDataset.json"
+})
+```
+
+**Workflow:** Always fetch and save the schema first, then reuse it for validating multiple datasets.
+
+#### `create_dataset`
+Create a Dataset entity from a Folder to enable SQL queries over the files.
+
+**Parameters:**
+- `folder_id` (string, required) - Synapse folder ID to convert to dataset
+- `name` (string, optional) - Name for the dataset (defaults to folder name + ' Dataset')
+- `parent_id` (string, optional) - Parent project/folder ID (defaults to folder's parent)
+
+**Returns:** Dataset ID, name, source folder, and item count
+
+**Use Case:** When you need to query files within a Folder using SQL, first convert it to a Dataset entity. This is required because `synapse_query` only works with Dataset entities, not Folders.
+
+**Example:**
+```python
+# Convert folder to dataset for querying
+create_dataset({
+  "folder_id": "syn12345678"
+})
+
+# Returns: {"dataset_id": "syn87654321", "item_count": 150, ...}
+# Now you can query: synapse_query({"table_id": "syn87654321", ...})
+```
+
+#### `submit_metadata`
+Submit validated metadata by adding annotations to any Synapse entity (dataset, file, folder, project, paper, etc.).
+
+**Parameters:**
+- `entity_id` (string, required) - Synapse entity ID (e.g., syn12345678)
+- `metadata` (object, required) - Validated metadata JSON to submit as annotations
+
+**Returns:** Submission status, entity type, and annotation count
+
+**Supported Entity Types:**
+- Dataset (for portal dataset metadata)
+- File (for individual file metadata)
+- Folder (for collection-level metadata)
+- Project (for study-level metadata)
+- Any other Synapse entity with annotation support
+
+**Note:** This tool is reusable across different curation workflows (datasets, papers, tools, etc.)
+
+---
+
+### 📁 Project Review Tools
+Used by `recipe.yaml` for reviewing and classifying Synapse projects.
+
+#### `get_data_classes`
+Fetch available data classification templates from the metadata dictionary.
+
+**Parameters:**
+- `templates_url` (string, optional) - URL to Data.yaml templates
+
+**Returns:** YAML content with all data class templates
+
+#### `get_project_children`
+Get immediate children (folders/files) of a Synapse container.
+
+**Parameters:**
+- `entity_id` (string, required) - Synapse project or folder ID
+- `include_types` (array, optional) - Filter by types (default: ["folder", "file"])
+
+**Returns:** List of children with id, name, and type
+
+#### `get_entity_info`
+Get detailed information about a Synapse entity including annotations.
+
+**Parameters:**
+- `entity_id` (string, required) - Synapse entity ID
+- `include_annotations` (boolean, optional) - Include annotations (default: true)
+
+**Returns:** Entity details with metadata and annotations
+
+**Note:** This tool is also used by recipe_release.yaml as it provides more complete information than the basic version.
+
+#### `walk_project_tree`
+Recursively traverse project structure to find all folders.
+
+**Parameters:**
+- `project_id` (string, required) - Synapse project ID
+- `max_depth` (integer, optional) - Maximum traversal depth (default: 5)
+
+**Returns:** Complete folder tree with paths and depth information
+
+#### `count_folder_contents`
+Count files and subfolders in a folder to determine if data exists.
+
+**Parameters:**
+- `folder_id` (string, required) - Synapse folder ID
+
+**Returns:** File count, folder count, and has_data flag
+
+---
+
+### 🔗 Shared Tools
+Used by both recipes for common operations.
+
+#### `get_data_sharing_plan`
+Retrieve Data Sharing Plan document for a study.
+
+**Parameters:**
+- `study_id` (string, required) - Synapse project ID
+
+**Returns:** Complete DSP JSON or error if not found
+
+**API Endpoint:** https://dsp.nf.synapse.org/api/dsp/json/{study_id}
+
+---
+
+### 📋 GitHub Integration
+
+GitHub issue management (creating issues, adding comments) is handled through the **official GitHub MCP server**, not this NF curator server.
+
+**Available GitHub Tools:**
+
+#### `issue_write`
+Create or update a GitHub issue.
+
+**Parameters:**
+- `repo` (string) - Repository name (e.g., "nf-osi/dcc-site")
+- `title` (string) - Issue title
+- `body` (string) - Issue body (markdown format)
+- `labels` (array, optional) - Issue labels
+- `issue_number` (integer, optional) - If provided, updates existing issue
+
+**Returns:** Issue URL and number
+
+#### `issue_read`
+Get details of a specific GitHub issue.
+
+**Parameters:**
+- `repo` (string) - Repository name
+- `issue_number` (integer) - Issue number to retrieve
+
+**Returns:** Complete issue details including title, body, state, labels, comments, etc.
+
+#### `add_issue_comment`
+Add a comment to an existing GitHub issue.
+
+**Parameters:**
+- `repo` (string) - Repository name
+- `issue_number` (integer) - Issue number to comment on
+- `body` (string) - Comment body (markdown format)
+
+**Returns:** Comment URL
+
+---
+
+## Recipe Tool Mapping
+
+### recipe_release.yaml (Portal Metadata Specialist)
+```yaml
+available_tools:
+  - synapse_query              # Execute SQL queries
+  - fetch_schema               # Get schema definition
+  - validate_metadata          # Validate against schema
+  - create_dataset             # Convert Folder to Dataset
+  - get_data_sharing_plan      # Retrieve DSP
+  - get_entity_info            # Get dataset details
+  - submit_metadata            # Submit as annotations
+```
+
+### recipe.yaml (Project Review Specialist)
+```yaml
+available_tools:
+  - get_data_sharing_plan      # Retrieve DSP
+  - get_data_classes           # Fetch classification templates
+  - walk_project_tree          # Explore project structure
+  - get_entity_info            # Get entity details
+  - get_project_children       # List container children
+  - count_folder_contents      # Check for data
+```
+
+---
+
+## Error Handling
+
+All tools return errors in a consistent format:
+
+```json
+{
+  "error": "Error description",
+  "details": "Additional context"
+}
+```
+
+Common errors:
+- **Authentication**: SYNAPSE_AUTH_TOKEN not set or invalid
+- **Not Found**: Entity or resource doesn't exist
+- **Permission Denied**: User lacks access to resource
+- **Validation**: Metadata doesn't conform to schema
+
+---
+
+## Authentication
+
+All Synapse tools require the `SYNAPSE_AUTH_TOKEN` environment variable:
+
+```bash
+export SYNAPSE_AUTH_TOKEN="your-personal-access-token"
+```
+
+Get your token from: https://www.synapse.org/ → Account Settings → Personal Access Tokens
+
+---
+
+## Examples
+
+### Portal Metadata Workflow
+```python
+# 1. Fetch schema
+fetch_schema({})
+
+# 2. Get entity info
+get_entity_info({"entity_id": "syn51234567"})
+
+# 3. Query metadata
+synapse_query({
+  "table_id": "syn51234567",
+  "query": "SELECT DISTINCT species FROM <table_id>"
+})
+
+# 4. Validate metadata
+validate_metadata({
+  "metadata": {...},
+  "schema": {...}
+})
+
+# 5. Submit metadata
+submit_metadata({
+  "entity_id": "syn51234567",  # Works with any entity type
+  "metadata": {...}
+})
+```
+
+### Project Review Workflow
+```python
+# 1. Get DSP
+get_data_sharing_plan({"study_id": "syn12345678"})
+
+# 2. Get data classification templates
+get_data_classes({})
+
+# 3. Walk project tree
+walk_project_tree({"project_id": "syn12345678"})
+
+# 4. For each folder, get info
+get_entity_info({"entity_id": "syn23456789"})
+
+# 5. Count contents
+count_folder_contents({"folder_id": "syn23456789"})
+```
