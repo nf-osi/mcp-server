@@ -1,0 +1,244 @@
+version: 1.0.0
+title: MCP Server Tools Tester
+description: Comprehensive test to exercise all tools in nf-curator/mcp_server.py
+instructions: You are a testing agent designed to systematically verify all MCP tools are functioning correctly.
+prompt: |
+  Your goal is to test ALL tools available in the nf-curator/mcp_server.py server to ensure they are working correctly.
+
+  Test study repo: {{ studyId }}
+
+  IMPORTANT NOTES:
+  - If {{ testFolderId }} or {{ testTableId }} are not provided, options are to discover candidates in the study repo OR skip tests requiring them and note as "N/A" in report
+  - Capture both successful and failed test results
+  - For each tool, document actual output (at least a sample)
+  - Note any warnings or unexpected behaviors even if test passes
+  - Be thorough but avoid excessive data dumps in the report
+  - If a test fails, attempt to diagnose why (permissions, invalid ID, etc.)
+
+  AVAILABLE TOOLS:
+
+  Portal Metadata Tools:
+  - synapse_query: Execute SQL query against a Synapse table
+  - fetch_schema: Fetch JSON schema from metadata dictionary
+  - validate_metadata: Validate JSON metadata against schema
+  - create_dataset: Create Dataset entity from a Folder
+  - submit_metadata: Submit validated metadata as annotations
+
+  Project Review Tools:
+  - get_data_classes: Fetch available data class templates
+  - get_project_children: Get immediate children entities
+  - get_entity_info: Get detailed entity information including annotations
+  - walk_project_tree: Recursively walk project structure
+  - count_folder_contents: Count files and subfolders in a folder
+
+  Shared Tools:
+  - get_data_sharing_plan: Retrieve Data Sharing Plan for a study
+
+  TEST WORKFLOW:
+
+  1. SHARED TOOLS TESTING
+     a. Test get_data_sharing_plan:
+        - Retrieve DSP for study {{ studyId }}
+        - Verify API works
+
+  2. PORTAL METADATA TOOLS TESTING
+     a. Test fetch_schema:
+        - Fetch the PortalDataset schema (default)
+        - Optionally save to file: "test_PortalDataset.json"
+        - Verify schema contains required properties
+        - Try fetching PortalPublication schema as well
+
+     b. Test synapse_query (use specified {{ testTableId }} if provided, or discover a table to use):
+        - Query for basic entity info: "SELECT id, name FROM <table_id> LIMIT 5"
+        - Verify query returns results
+        - Test SELECT * with LIMIT: "SELECT * FROM <table_id> LIMIT 3" (should succeed)
+        - Test SELECT * with WHERE: "SELECT * FROM <table_id> WHERE ..." (should succeed if < 1000 rows)
+        - Test SELECT * without LIMIT or WHERE: "SELECT * FROM <table_id>" (should be rejected)
+        - Note: SELECT * requires either LIMIT or WHERE clause; WHERE results are capped at 1000 rows
+
+     c. Test validate_metadata:
+        - Create a minimal valid PortalDataset metadata object:
+          ```json
+          {
+            "id": "test-dataset-001",
+            "name": "Test Dataset",
+            "description": "Test dataset for validation",
+            "datasetType": "processed",
+            "funderId": "NTAP",
+            "funderName": "Neurofibromatosis Therapeutic Acceleration Program",
+            "study": ["{{ studyId }}"]
+          }
+          ```
+        - Validate against the fetched schema file
+        - Verify validation passes or note specific errors
+        - Try an invalid metadata object (missing required fields) to test error handling
+
+     d. Test create_dataset (if {{ testFolderId }} is provided):
+        - Create a Dataset entity from the test folder
+        - Use parent_id={{ studyId }} to place it in the study
+        - Verify dataset creation succeeds
+        - Note the returned dataset_id for use in subsequent tests
+
+     e. Test submit_metadata:
+        - Use the validated metadata from step 2c
+        - Submit to the dataset created in step 2d (or {{ testTableId }} if no folder provided)
+        - Verify annotations are successfully added
+        - Confirm the number of annotations added matches expectations
+
+  3. PROJECT REVIEW TOOLS TESTING
+     a. Test get_data_classes:
+        - Fetch available data class templates from metadata dictionary
+        - Verify YAML response contains data class definitions
+        - List the available data classes found
+
+     b. Test get_entity_info:
+        - Get detailed info for study {{ studyId }}
+        - Verify response includes id, name, type, annotations
+        - Get info for {{ testFolderId }} if provided
+        - Compare annotation availability between entities
+
+     c. Test get_project_children:
+        - Get immediate children of {{ studyId }}
+        - Filter for folders only: include_types=["folder"]
+        - Filter for files only: include_types=["file"]
+        - Note the count of each type
+        - Get children of {{ testFolderId }} if provided
+
+     d. Test walk_project_tree:
+        - Walk the project structure starting from {{ studyId }}
+        - Use max_depth=2 to limit traversal for testing
+        - Count total folders found
+        - Note the deepest path discovered
+
+     e. Test count_folder_contents:
+        - Count contents of {{ testFolderId }} if provided
+        - Otherwise, pick a folder from get_project_children results
+        - Verify file_count and folder_count are returned
+        - Note whether has_data is true/false
+
+  4. ERROR HANDLING TESTING
+     a. Test with invalid entity ID (e.g., "syn99999999999"):
+        - Try get_entity_info with invalid ID
+        - Verify graceful error handling
+
+     b. Test synapse_query validation:
+        - Test SELECT * without LIMIT or WHERE: should be rejected with helpful error message
+        - Test SELECT * with WHERE that might return > 1000 rows (if possible): should execute but return error about too many rows with suggestion to add LIMIT
+
+     c. Test validate_metadata with invalid schema file:
+        - Try to validate against non-existent file
+        - Verify appropriate error is returned
+
+  5. GENERATE TEST REPORT
+     Create a comprehensive markdown test report: `mcp_tools_test_report.md`
+     ```markdown
+     # MCP Server Tools Test Report
+
+     **Test Date:** <date>
+     **Study ID:** {{ studyId }}
+     **Test Folder:** {{ testFolderId }}
+     **Test Table/Dataset:** {{ testTableId }}
+
+     ## Test Results Summary
+
+     | Tool Category | Tool Name | Status | Notes |
+     |--------------|-----------|--------|-------|
+     | Shared | get_data_sharing_plan | ✓/✗ | ... |
+     | Portal Metadata | fetch_schema | ✓/✗ | ... |
+     | Portal Metadata | synapse_query | ✓/✗ | ... |
+     | Portal Metadata | validate_metadata | ✓/✗ | ... |
+     | Portal Metadata | create_dataset | ✓/✗ | ... |
+     | Portal Metadata | submit_metadata | ✓/✗ | ... |
+     | Project Review | get_data_classes | ✓/✗ | ... |
+     | Project Review | get_entity_info | ✓/✗ | ... |
+     | Project Review | get_project_children | ✓/✗ | ... |
+     | Project Review | walk_project_tree | ✓/✗ | ... |
+     | Project Review | count_folder_contents | ✓/✗ | ... |
+
+     ## Overall Assessment
+
+     - **Total Tools:** 11
+     - **Tools Passing:** <count>
+     - **Tools Failing:** <count>
+     - **Tools Not Tested:** <count> (with reasons)
+
+     ## Issues Discovered
+
+     <List any bugs, unexpected behaviors, or issues found during testing>
+
+     ## Recommendations
+
+     <Suggest any improvements to error handling, documentation, or functionality>
+
+     ## Test Environment
+
+     - MCP Server: nf-curator/mcp_server.py
+     - Python Version: <if known>
+     - Synapse Client Version: <if accessible>
+     - Test Runner: <your identity/version>
+     ```
+
+activities:
+- Test get_data_sharing_plan tool
+- Test fetch_schema tool with different schemas
+- Test synapse_query tool (if table ID provided)
+- Test validate_metadata with valid and invalid metadata
+- Test create_dataset tool (if folder ID provided)
+- Test submit_metadata tool
+- Test get_data_classes tool
+- Test get_entity_info tool on multiple entities
+- Test get_project_children with different filters
+- Test walk_project_tree tool
+- Test count_folder_contents tool (if folder ID provided)
+- Test error handling with invalid inputs
+- Generate comprehensive test report in markdown
+
+extensions:
+- type: stdio
+  name: nf-curator
+  cmd: python
+  args:
+    - nf-curator/mcp_server.py
+  env: {}
+  env_keys:
+  - SYNAPSE_AUTH_TOKEN
+  # Make ALL tools available for comprehensive testing
+  available_tools:
+    - synapse_query
+    - fetch_schema
+    - validate_metadata
+    - create_dataset
+    - submit_metadata
+    - get_data_classes
+    - get_project_children
+    - get_entity_info
+    - walk_project_tree
+    - count_folder_contents
+    - get_data_sharing_plan
+
+settings:
+  goose_provider: google
+  goose_model: gemini-2.5-pro
+  temperature: 0.0
+
+parameters:
+- key: studyId
+  input_type: string
+  requirement: optional
+  default: syn26462036
+  description: Synapse study/project ID to use for testing (e.g., syn12345678)
+
+- key: testFolderId
+  input_type: string
+  requirement: optional
+  default: None
+  description: Optional specific folder ID for testing create_dataset and count_folder_contents tools.
+
+- key: testTableId
+  input_type: string
+  requirement: optional
+  default: None
+  description: Optional specific table/dataset ID for testing synapse_query tool.
+
+author:
+  contact: avu
