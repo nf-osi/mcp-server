@@ -5,7 +5,7 @@ build-backend = "hatchling.build"
 [project]
 name = "nfty"
 version = "0.1.0"
-description = "Nifty MCP server for NF Data Portal curation workflows"
+description = "MCP server for NFty tools supporting NF Data Portal workflows"
 readme = "nfty/README.md"
 requires-python = ">=3.10"
 license = {text = "MIT"}
