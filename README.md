@@ -68,13 +68,12 @@ Add to your Claude Desktop configuration file:
 **Windows**: `%APPDATA%\Claude\claude_desktop_config.json`
 **Linux**: `~/.config/Claude/claude_desktop_config.json`
 
-**Single Server Example (nfty only):**
 ```json
 {
   "mcpServers": {
     "nfty": {
-      "command": "python",
-      "args": ["/absolute/path/to/mcp-server/nfty/mcp_server.py"],
+      "command": "uvx",
+      "args": ["--from", "/absolute/path/to/mcp-server", "nfty"],
       "env": {
         "SYNAPSE_AUTH_TOKEN": "your-synapse-personal-access-token"
       }
@@ -83,13 +82,15 @@ Add to your Claude Desktop configuration file:
 }
 ```
 
+**Important**: Replace `/absolute/path/to/mcp-server` with the actual path to your repository.
+
 **Multiple Servers Example:**
 ```json
 {
   "mcpServers": {
     "nfty": {
-      "command": "python",
-      "args": ["/absolute/path/to/mcp-server/nfty/mcp_server.py"],
+      "command": "uvx",
+      "args": ["--from", "/absolute/path/to/mcp-server", "nfty"],
       "env": {
         "SYNAPSE_AUTH_TOKEN": "your-synapse-personal-access-token"
       }
@@ -103,8 +104,6 @@ Add to your Claude Desktop configuration file:
 }
 ```
 
-**Important**: Replace `/absolute/path/to/mcp-server` with the actual path to your repository.
-
 **Note**: Each server runs as an independent process. You can enable/disable servers by adding/removing them from the configuration.
 
 ```
@@ -114,8 +113,8 @@ Add to your Claude Desktop configuration file:
 Refer to your client's documentation for MCP server configuration. Each server's configuration follows this pattern:
 
 **For nfty (Python):**
-- **Command**: `python`
-- **Args**: `["/path/to/mcp-server/nfty/mcp_server.py"]`
+- **Command**: `uvx`
+- **Args**: `["--from", "/path/to/mcp-server", "nfty"]`
 - **Environment**: `SYNAPSE_AUTH_TOKEN` with your token
 
 **For memory (Node.js example):**
@@ -135,7 +134,7 @@ Test each server directly:
 **nfty:**
 ```bash
 export SYNAPSE_AUTH_TOKEN="your-token"
-python nfty/mcp_server.py
+uvx --from . nfty
 ```
 
 The server will start and wait for MCP protocol messages. Press Ctrl+C to stop.
