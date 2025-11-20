@@ -1,0 +1,36 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "nfty"
+version = "0.1.0"
+description = "MCP server for NFty tools supporting NF Data Portal workflows"
+readme = "nfty/README.md"
+requires-python = ">=3.10"
+license = {text = "MIT"}
+authors = [
+    {name = "NF-OSI", email = "nf-osi@sagebionetworks.org"}
+]
+keywords = ["mcp", "synapse", "curation", "neurofibromatosis"]
+
+dependencies = [
+    "mcp>=0.9.0",
+    "synapseclient>=4.0.0",
+    "requests>=2.31.0",
+    "jsonschema>=4.19.0",
+    "python-json-logger>=2.0.0",
+    "pandas>=1.5.0",
+    "numpy>=1.23.0"
+]
+
+[project.urls]
+Homepage = "https://github.com/nf-osi/mcp-server"
+Repository = "https://github.com/nf-osi/mcp-server"
+Issues = "https://github.com/nf-osi/mcp-server/issues"
+
+[project.scripts]
+nfty = "nfty.__main__:main"
+
+[tool.hatch.build.targets.wheel]
+packages = ["nfty"]

@@ -1202,7 +1202,7 @@ async def get_data_sharing_plan(args: dict) -> list[TextContent]:
         )]
 
 
-async def main():
+async def async_main():
     """Run the MCP server"""
     # Ensure logging goes to stderr before any server operations
     logger.info("Starting NF Curator MCP Server")
@@ -1215,6 +1215,11 @@ async def main():
         )
 
 
-if __name__ == "__main__":
+def main():
+    """Entry point for the nfty command"""
     import asyncio
-    asyncio.run(main())
+    asyncio.run(async_main())
+
+
+if __name__ == "__main__":
+    main()
