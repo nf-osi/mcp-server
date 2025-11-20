@@ -1,6 +1,6 @@
-"""NF Curator MCP Server
+"""NF Tools MCP Server
 
-Unified MCP server providing tools for both:
+MCP server providing NFty tools for work such as:
 - Portal metadata generation and submission
 - Project review and dataset classification
 """
