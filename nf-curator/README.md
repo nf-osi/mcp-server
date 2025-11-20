@@ -8,12 +8,33 @@ This server provides tools for two main workflows:
 - **Portal Metadata Generation** (recipe_release.yaml) - Tools for generating and submitting dataset metadata to the NF Portal
 - **Project Review & Classification** (recipe.yaml) - Tools for reviewing Synapse projects and classifying datasets
 
-Both workflows use the same MCP server (`nf-curator/mcp_server.py`) but access different subsets of tools via the `available_tools` configuration in their respective recipes.
+Both workflows use the same MCP server but access different subsets of tools via the `available_tools` configuration in their respective recipes.
 
 ## Installation
 
+### Using uvx (Recommended)
+
+The recommended way to run this MCP server is using `uvx`, which handles dependencies automatically:
+
 ```bash
-pip install -r requirements.txt
+# From the mcp-server directory (parent of nf-curator):
+uvx --from . nf-curator
+
+# Or install in development mode
+uv pip install -e .
+```
+
+### Using pip
+
+From the `mcp-server` directory (parent of `nf-curator`):
+
+```bash
+pip install .
+```
+
+For development:
+```bash
+pip install -e .
 ```
 
 ## Environment Setup
@@ -82,9 +103,11 @@ The MCP server is automatically invoked by the Goose recipe system. Each recipe 
 extensions:
 - type: mcp
   name: nf-curator
-  command: python
+  command: uvx
   args:
-    - nf-curator/mcp_server.py
+    - --from
+    - .
+    - nf-curator
   available_tools:
     - get_data_sharing_plan
     - get_data_classes
@@ -115,9 +138,11 @@ extensions:
 extensions:
 - type: mcp
   name: nf-curator
-  command: python
+  command: uvx
   args:
-    - nf-curator/mcp_server.py
+    - --from
+    - .
+    - nf-curator
   available_tools:
     - synapse_query
     - fetch_schema
@@ -154,11 +179,14 @@ The unified server provides domain-specific tools for Synapse data curation:
 
 ## Testing
 
-Test the server manually:
+Test the server manually from the `mcp-server` directory:
 
 ```bash
 # Ensure SYNAPSE_AUTH_TOKEN is set
-python nf-curator/mcp_server.py
+uvx --from . nf-curator
+
+# Or if installed in development mode:
+nf-curator
 ```
 
 ## Troubleshooting
@@ -175,8 +203,9 @@ python nf-curator/mcp_server.py
 - Check token has required scopes: `repo`, `read:org`
 
 **Import Errors**:
-- Run `pip install -r requirements.txt`
-- Ensure Python 3.8+ is installed
+- If using uvx: Dependencies are automatically managed
+- If using pip: Run `pip install .` or `pip install -e .`
+- Ensure Python 3.10+ is installed
 
 **Tool Not Found**:
 - Check that the tool is listed in `available_tools` for your recipe
