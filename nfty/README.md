@@ -1,6 +1,6 @@
-# NF Curator MCP Server
+# nfty - Nifty MCP Server for NF Data Curation
 
-Unified MCP (Model Context Protocol) server providing specialized tools for Synapse data curation workflows.
+Unified MCP (Model Context Protocol) server providing nifty tools for Synapse data curation workflows.
 
 ## Overview
 
@@ -17,8 +17,8 @@ Both workflows use the same MCP server but access different subsets of tools via
 The recommended way to run this MCP server is using `uvx`, which handles dependencies automatically:
 
 ```bash
-# From the mcp-server directory (parent of nf-curator):
-uvx --from . nf-curator
+# From the mcp-server directory (parent of nfty):
+uvx --from . nfty
 
 # Or install in development mode
 uv pip install -e .
@@ -26,7 +26,7 @@ uv pip install -e .
 
 ### Using pip
 
-From the `mcp-server` directory (parent of `nf-curator`):
+From the `mcp-server` directory (parent of `nfty`):
 
 ```bash
 pip install .
@@ -102,12 +102,12 @@ The MCP server is automatically invoked by the Goose recipe system. Each recipe 
 ```yaml
 extensions:
 - type: mcp
-  name: nf-curator
+  name: nfty
   command: uvx
   args:
     - --from
     - .
-    - nf-curator
+    - nfty
   available_tools:
     - get_data_sharing_plan
     - get_data_classes
@@ -137,12 +137,12 @@ extensions:
 ```yaml
 extensions:
 - type: mcp
-  name: nf-curator
+  name: nfty
   command: uvx
   args:
     - --from
     - .
-    - nf-curator
+    - nfty
   available_tools:
     - synapse_query
     - fetch_schema
@@ -183,10 +183,10 @@ Test the server manually from the `mcp-server` directory:
 
 ```bash
 # Ensure SYNAPSE_AUTH_TOKEN is set
-uvx --from . nf-curator
+uvx --from . nfty
 
 # Or if installed in development mode:
-nf-curator
+nfty
 ```
 
 ## Troubleshooting

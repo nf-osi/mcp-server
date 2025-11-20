@@ -4,8 +4,8 @@ A collection of MCP servers that give your AI assistant access to NF-OSI resourc
 
 ## Available Servers
 
-### [nf-curator](nf-curator/) (Python)
-Specialized tools for Synapse data curation workflows. Enables AI assistants to:
+### [nfty](nfty/) (Python)
+Nifty tools for Synapse data curation workflows. Enables AI assistants to:
 
 - Query and extract metadata from Synapse datasets
 - Validate metadata against JSON schemas
@@ -51,7 +51,7 @@ This repository is organized as a **monorepo** containing multiple independent M
 2. **Install the server(s) you want to use**
 
    Each server has its own installation instructions in its subdirectory:
-   - [nf-curator installation](nf-curator/README.md#installation)
+   - [nfty installation](nfty/README.md#installation)
    - [memory installation](memory/README.md#installation) (when available)
 
    You can install and use multiple servers simultaneously - they run as independent processes.
@@ -68,13 +68,13 @@ Add to your Claude Desktop configuration file:
 **Windows**: `%APPDATA%\Claude\claude_desktop_config.json`
 **Linux**: `~/.config/Claude/claude_desktop_config.json`
 
-**Single Server Example (nf-curator only):**
+**Single Server Example (nfty only):**
 ```json
 {
   "mcpServers": {
-    "nf-curator": {
+    "nfty": {
       "command": "python",
-      "args": ["/absolute/path/to/mcp-server/nf-curator/mcp_server.py"],
+      "args": ["/absolute/path/to/mcp-server/nfty/mcp_server.py"],
       "env": {
         "SYNAPSE_AUTH_TOKEN": "your-synapse-personal-access-token"
       }
@@ -87,9 +87,9 @@ Add to your Claude Desktop configuration file:
 ```json
 {
   "mcpServers": {
-    "nf-curator": {
+    "nfty": {
       "command": "python",
-      "args": ["/absolute/path/to/mcp-server/nf-curator/mcp_server.py"],
+      "args": ["/absolute/path/to/mcp-server/nfty/mcp_server.py"],
       "env": {
         "SYNAPSE_AUTH_TOKEN": "your-synapse-personal-access-token"
       }
@@ -113,9 +113,9 @@ Add to your Claude Desktop configuration file:
 
 Refer to your client's documentation for MCP server configuration. Each server's configuration follows this pattern:
 
-**For nf-curator (Python):**
+**For nfty (Python):**
 - **Command**: `python`
-- **Args**: `["/path/to/mcp-server/nf-curator/mcp_server.py"]`
+- **Args**: `["/path/to/mcp-server/nfty/mcp_server.py"]`
 - **Environment**: `SYNAPSE_AUTH_TOKEN` with your token
 
 **For memory (Node.js example):**
@@ -132,10 +132,10 @@ Refer to your client's documentation for MCP server configuration. Each server's
 
 Test each server directly:
 
-**nf-curator:**
+**nfty:**
 ```bash
 export SYNAPSE_AUTH_TOKEN="your-token"
-python nf-curator/mcp_server.py
+python nfty/mcp_server.py
 ```
 
 The server will start and wait for MCP protocol messages. Press Ctrl+C to stop.
@@ -144,10 +144,10 @@ The server will start and wait for MCP protocol messages. Press Ctrl+C to stop.
 
 ## Usage
 
-Once configured, your AI assistant can access the tools provided by each enabled server.
+Once configured, your AI assistant can access the nifty tools provided by each enabled server.
 
 See each server's documentation for specific capabilities and usage examples:
-- [nf-curator documentation](nf-curator/README.md)
+- [nfty documentation](nfty/README.md)
 - [memory documentation](memory/README.md) (when available)
 
 ## Development
@@ -167,7 +167,7 @@ goose run --recipe tests/curator_tester.yaml
 
 ### Adding New Tools
 
-#### nf-curator
+#### nfty
 
 1. Add tool definition to `list_tools()` in `mcp_server.py`
 2. Implement the async handler function
