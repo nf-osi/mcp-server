@@ -41,30 +41,11 @@ pip install -e .
 
 ### Required Environment Variables
 
-**1. Synapse Authentication:**
+**Synapse Authentication:**
 ```bash
 export SYNAPSE_AUTH_TOKEN="your-synapse-token"
 ```
 Get your token from: https://www.synapse.org/ → Account Settings → Personal Access Tokens
-
-**2. GitHub Authentication (for issue management):**
-```bash
-export GITHUB_PERSONAL_ACCESS_TOKEN="your-github-token"
-```
-Create your token at: https://github.com/settings/personal-access-tokens/new
-
-**Required token scopes:**
-- `repo` – Repository operations
-- `read:org` – Organization team access (if using org repositories)
-
-### Docker Requirement
-
-The GitHub MCP server runs via Docker. Ensure Docker is installed and running:
-```bash
-docker --version
-```
-
-Install Docker from: https://docs.docker.com/get-docker/
 
 ## Available Tools
 
@@ -83,16 +64,6 @@ Install Docker from: https://docs.docker.com/get-docker/
 - `get_entity_info` - Get entity information including annotations
 - `get_project_children` - Get immediate children of a container
 - `count_folder_contents` - Count files and folders
-
-### GitHub Integration (Separate MCP Server)
-GitHub issue management (creating issues, adding comments) is handled through the **official GitHub MCP server** running in Docker, not this NF curator server.
-
-**Available GitHub Tools:**
-- `issue_write` - Create or update issues
-- `issue_read` - Get details of a specific issue
-- `add_issue_comment` - Add comments to existing issues
-
-**Configuration:** Both recipes automatically include the GitHub MCP server extension. No additional setup needed beyond setting the `GITHUB_PERSONAL_ACCESS_TOKEN` environment variable.
 
 ## Usage
 
@@ -115,22 +86,6 @@ extensions:
     - get_entity_info
     - get_project_children
     - count_folder_contents
-- type: mcp
-  name: github
-  command: docker
-  args:
-    - run
-    - -i
-    - --rm
-    - -e
-    - GITHUB_PERSONAL_ACCESS_TOKEN
-    - ghcr.io/github/github-mcp-server
-  env:
-    GITHUB_TOOLSETS: issues
-  available_tools:
-    - issue_write
-    - issue_read
-    - add_issue_comment
 ```
 
 **recipe_release.yaml** (Portal Metadata):
@@ -150,22 +105,6 @@ extensions:
     - get_data_sharing_plan
     - get_entity_info
     - submit_metadata
-- type: mcp
-  name: github
-  command: docker
-  args:
-    - run
-    - -i
-    - --rm
-    - -e
-    - GITHUB_PERSONAL_ACCESS_TOKEN
-    - ghcr.io/github/github-mcp-server
-  env:
-    GITHUB_TOOLSETS: issues
-  available_tools:
-    - issue_write
-    - issue_read
-    - add_issue_comment
 ```
 
 ## Architecture
@@ -175,7 +114,6 @@ The unified server provides domain-specific tools for Synapse data curation:
 - The MCP protocol ensures agents can only call authorized tools
 - Single codebase for easier maintenance
 - Shared authentication and error handling
-- GitHub operations are handled by the official GitHub MCP server (configured separately)
 
 ## Testing
 
@@ -195,13 +133,6 @@ nfty
 - Ensure `SYNAPSE_AUTH_TOKEN` environment variable is set
 - Verify token is valid at https://www.synapse.org/
 
-**GitHub MCP Server Issues**:
-- Ensure `GITHUB_PERSONAL_ACCESS_TOKEN` environment variable is set
-- Verify Docker is running: `docker ps`
-- Test Docker access: `docker run --rm hello-world`
-- Pull the latest image: `docker pull ghcr.io/github/github-mcp-server`
-- Check token has required scopes: `repo`, `read:org`
-
 **Import Errors**:
 - If using uvx: Dependencies are automatically managed
 - If using pip: Run `pip install .` or `pip install -e .`
@@ -210,4 +141,3 @@ nfty
 **Tool Not Found**:
 - Check that the tool is listed in `available_tools` for your recipe
 - Verify tool name matches exactly (case-sensitive)
-- For GitHub tools: Ensure Docker container started successfully
