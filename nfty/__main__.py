@@ -485,15 +485,6 @@ async def list_tools() -> list[Tool]:
     if _openapi_spec is not None:
         tools.extend([
             Tool(
-                name="openapi_get_spec",
-                description="Get the full OpenAPI specification document",
-                inputSchema={
-                    "type": "object",
-                    "properties": {},
-                    "required": []
-                }
-            ),
-            Tool(
                 name="openapi_list_schemas",
                 description="List all available schemas in the loaded OpenAPI spec",
                 inputSchema={
@@ -574,8 +565,6 @@ async def call_tool(name: str, arguments: dict) -> list[TextContent]:
             result = await get_data_sharing_plan(arguments)
 
         # OpenAPI validation tools
-        elif name == "openapi_get_spec":
-            result = await openapi_get_spec(arguments)
         elif name == "openapi_list_schemas":
             result = await openapi_list_schemas(arguments)
         elif name == "openapi_validate":
@@ -1380,15 +1369,6 @@ async def get_data_sharing_plan(args: dict) -> list[TextContent]:
 # ============================================================================
 # OPENAPI VALIDATION TOOLS
 # ============================================================================
-
-async def openapi_get_spec(args: dict) -> list[TextContent]:
-    """Get the full OpenAPI specification document."""
-    result = {
-        "spec_uri": _openapi_spec_uri,
-        "spec": _openapi_spec,
-    }
-    return [TextContent(type="text", text=json.dumps(result, indent=2))]
-
 
 async def openapi_list_schemas(args: dict) -> list[TextContent]:
     """List all available schemas in the loaded OpenAPI spec."""

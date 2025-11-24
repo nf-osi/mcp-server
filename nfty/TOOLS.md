@@ -196,26 +196,6 @@ export OPENAPI_SPEC_URI="https://example.com/openapi.json"
 
 Supports both YAML and JSON formats.
 
-#### `openapi_get_spec`
-Get the full OpenAPI specification document.
-
-**Parameters:** None
-
-**Returns:** The complete OpenAPI spec with URI
-
-**Example:**
-```json
-{
-  "spec_uri": "https://example.com/openapi.json",
-  "spec": {
-    "openapi": "3.0.0",
-    "info": {...},
-    "paths": {...},
-    "components": {...}
-  }
-}
-```
-
 #### `openapi_list_schemas`
 List all available schemas defined in the loaded OpenAPI spec.
 
