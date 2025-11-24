@@ -22,6 +22,8 @@ import synapseclient
 from synapseclient.core.exceptions import SynapseHTTPError
 import requests
 import jsonschema
+from jsonschema import Draft7Validator
+import yaml
 from mcp.server.stdio import stdio_server
 from mcp.server import Server
 from mcp.types import Tool, TextContent
@@ -60,6 +62,113 @@ logger = logging.getLogger(__name__)
 
 # Initialize Synapse client
 syn = None
+
+# ---------------------------------------------------------------------------
+# OpenAPI Spec Loading (optional, enabled via OPENAPI_SPEC_URI env var)
+# ---------------------------------------------------------------------------
+
+_openapi_spec: Optional[dict] = None
+_openapi_spec_uri: Optional[str] = None
+
+
+def load_openapi_spec(uri: str) -> dict:
+    """Load an OpenAPI spec from a file path or URL.
+
+    Args:
+        uri: Either a local file path or HTTP(S) URL to the OpenAPI spec
+
+    Returns:
+        Parsed OpenAPI spec as a dictionary
+    """
+    if uri.startswith(('http://', 'https://')):
+        response = requests.get(uri, timeout=30)
+        response.raise_for_status()
+        content = response.text
+        # Determine format from content-type or URL
+        if uri.endswith(('.yaml', '.yml')) or 'yaml' in response.headers.get('content-type', ''):
+            return yaml.safe_load(content)
+        return json.loads(content)
+    else:
+        # Local file path
+        path = Path(uri)
+        content = path.read_text()
+        if path.suffix in ('.yaml', '.yml'):
+            return yaml.safe_load(content)
+        return json.loads(content)
+
+
+def get_openapi_schemas() -> dict:
+    """Get all schemas from the loaded OpenAPI spec."""
+    if _openapi_spec is None:
+        return {}
+    components = _openapi_spec.get("components", {})
+    return components.get("schemas", {})
+
+
+def validate_against_openapi_schema(payload: dict, schema_name: str) -> dict:
+    """Validate a payload against a named schema from the OpenAPI spec."""
+    schemas = get_openapi_schemas()
+
+    if schema_name not in schemas:
+        return {
+            "valid": False,
+            "error": f"Schema '{schema_name}' not found. Available: {list(schemas.keys())}",
+        }
+
+    schema = schemas[schema_name]
+
+    # Create a resolver that understands OpenAPI-style refs
+    # Wrap schemas in a JSON Schema compatible structure
+    full_schema = {
+        "$schema": "http://json-schema.org/draft-07/schema#",
+        "definitions": schemas,
+        **schema,
+    }
+
+    # Rewrite $ref paths from #/components/schemas/X to #/definitions/X
+    full_schema_str = json.dumps(full_schema)
+    full_schema_str = full_schema_str.replace(
+        "#/components/schemas/", "#/definitions/"
+    )
+    full_schema = json.loads(full_schema_str)
+
+    validator = Draft7Validator(full_schema)
+    errors = list(validator.iter_errors(payload))
+
+    if not errors:
+        return {"valid": True, "errors": []}
+
+    return {
+        "valid": False,
+        "errors": [
+            {
+                "path": "/" + "/".join(str(p) for p in e.absolute_path),
+                "message": e.message,
+                "schema_path": "/" + "/".join(str(p) for p in e.schema_path),
+            }
+            for e in errors
+        ],
+    }
+
+
+def _init_openapi_spec():
+    """Initialize OpenAPI spec from environment variable if set."""
+    global _openapi_spec, _openapi_spec_uri
+
+    uri = os.environ.get('OPENAPI_SPEC_URI')
+    if not uri:
+        return
+
+    try:
+        logger.info(f"Loading OpenAPI spec from: {uri}")
+        _openapi_spec_uri = uri
+        _openapi_spec = load_openapi_spec(uri)
+        schemas = get_openapi_schemas()
+        logger.info(f"Loaded OpenAPI spec with {len(schemas)} schemas")
+    except Exception as e:
+        logger.error(f"Failed to load OpenAPI spec from {uri}: {e}")
+        _openapi_spec = None
+        _openapi_spec_uri = None
 
 
 class RedirectStdout:
@@ -166,7 +275,7 @@ server = Server("nf-curator")
 @server.list_tools()
 async def list_tools() -> list[Tool]:
     """List all available tools"""
-    return [
+    tools = [
         # Portal Metadata Tools
         Tool(
             name="synapse_query",
@@ -372,6 +481,54 @@ async def list_tools() -> list[Tool]:
         )
     ]
 
+    # Conditionally add OpenAPI validation tools if spec is loaded
+    if _openapi_spec is not None:
+        tools.extend([
+            Tool(
+                name="openapi_list_schemas",
+                description="List all available schemas in the loaded OpenAPI spec",
+                inputSchema={
+                    "type": "object",
+                    "properties": {},
+                    "required": []
+                }
+            ),
+            Tool(
+                name="openapi_validate",
+                description="Validate a JSON payload against a schema from the OpenAPI spec",
+                inputSchema={
+                    "type": "object",
+                    "properties": {
+                        "schema_name": {
+                            "type": "string",
+                            "description": "Name of the schema from #/components/schemas"
+                        },
+                        "payload": {
+                            "type": "object",
+                            "description": "The JSON payload to validate"
+                        }
+                    },
+                    "required": ["schema_name", "payload"]
+                }
+            ),
+            Tool(
+                name="openapi_get_schema",
+                description="Get the full schema definition for a named schema from the OpenAPI spec",
+                inputSchema={
+                    "type": "object",
+                    "properties": {
+                        "schema_name": {
+                            "type": "string",
+                            "description": "Name of the schema from #/components/schemas"
+                        }
+                    },
+                    "required": ["schema_name"]
+                }
+            )
+        ])
+
+    return tools
+
 
 @server.call_tool()
 async def call_tool(name: str, arguments: dict) -> list[TextContent]:
@@ -407,6 +564,14 @@ async def call_tool(name: str, arguments: dict) -> list[TextContent]:
         # Shared tools
         elif name == "get_data_sharing_plan":
             result = await get_data_sharing_plan(arguments)
+
+        # OpenAPI validation tools
+        elif name == "openapi_list_schemas":
+            result = await openapi_list_schemas(arguments)
+        elif name == "openapi_validate":
+            result = await openapi_validate(arguments)
+        elif name == "openapi_get_schema":
+            result = await openapi_get_schema(arguments)
         else:
             result = [TextContent(type="text", text=f"Unknown tool: {name}")]
 
@@ -1202,10 +1367,71 @@ async def get_data_sharing_plan(args: dict) -> list[TextContent]:
         )]
 
 
+# ============================================================================
+# OPENAPI VALIDATION TOOLS
+# ============================================================================
+
+async def openapi_list_schemas(args: dict) -> list[TextContent]:
+    """List all available schemas in the loaded OpenAPI spec."""
+    schemas = get_openapi_schemas()
+    result = {
+        "spec_uri": _openapi_spec_uri,
+        "schemas": list(schemas.keys()),
+        "count": len(schemas),
+    }
+    return [TextContent(type="text", text=json.dumps(result, indent=2))]
+
+
+async def openapi_validate(args: dict) -> list[TextContent]:
+    """Validate a JSON payload against a schema from the OpenAPI spec."""
+    schema_name = args.get("schema_name")
+    payload = args.get("payload")
+
+    if not schema_name:
+        return [TextContent(
+            type="text",
+            text=json.dumps({"error": "schema_name is required"})
+        )]
+    if payload is None:
+        return [TextContent(
+            type="text",
+            text=json.dumps({"error": "payload is required"})
+        )]
+
+    result = validate_against_openapi_schema(payload, schema_name)
+    return [TextContent(type="text", text=json.dumps(result, indent=2))]
+
+
+async def openapi_get_schema(args: dict) -> list[TextContent]:
+    """Get the full schema definition for a named schema."""
+    schema_name = args.get("schema_name")
+    schemas = get_openapi_schemas()
+
+    if not schema_name:
+        return [TextContent(
+            type="text",
+            text=json.dumps({"error": "schema_name is required"})
+        )]
+
+    if schema_name not in schemas:
+        return [TextContent(
+            type="text",
+            text=json.dumps({
+                "error": f"Schema '{schema_name}' not found",
+                "available": list(schemas.keys())
+            })
+        )]
+
+    return [TextContent(type="text", text=json.dumps(schemas[schema_name], indent=2))]
+
+
 async def async_main():
     """Run the MCP server"""
     # Ensure logging goes to stderr before any server operations
     logger.info("Starting NF Curator MCP Server")
+
+    # Initialize OpenAPI spec if OPENAPI_SPEC_URI is set
+    _init_openapi_spec()
 
     async with stdio_server() as (read_stream, write_stream):
         await server.run(
