@@ -233,29 +233,52 @@ List all available schemas defined in the loaded OpenAPI spec.
 ```
 
 #### `openapi_validate`
-Validate a JSON payload against a schema from the OpenAPI spec.
+Validate JSON payload(s) against a schema from the OpenAPI spec. Supports both single objects and batch validation with arrays.
 
 **Parameters:**
 - `schema_name` (string, required) - Name of the schema from `#/components/schemas`
-- `payload` (object, required) - The JSON payload to validate
+- `payload` (object or array, required) - A single JSON object or an array of objects to validate
 
-**Returns:** Validation result with errors if invalid
+**Returns:** Validation result with errors if invalid. For batch validation, includes summary counts.
 
 **Examples:**
 ```python
-# Valid payload
+# Single object - valid
 openapi_validate({
   "schema_name": "User",
   "payload": {"id": 1, "name": "John"}
 })
 # Returns: {"valid": true, "errors": []}
 
-# Invalid payload
+# Single object - invalid
 openapi_validate({
   "schema_name": "User",
   "payload": {"id": "not-an-int"}
 })
 # Returns: {"valid": false, "errors": [{"path": "/id", "message": "'not-an-int' is not of type 'integer'", ...}]}
+
+# Batch validation - array of objects
+openapi_validate({
+  "schema_name": "User",
+  "payload": [
+    {"id": 1, "name": "John"},
+    {"id": 2, "name": "Jane"},
+    {"id": "bad", "name": "Invalid"}
+  ]
+})
+# Returns:
+# {
+#   "batch": true,
+#   "count": 3,
+#   "all_valid": false,
+#   "valid_count": 2,
+#   "invalid_count": 1,
+#   "results": [
+#     {"valid": true, "errors": [], "index": 0},
+#     {"valid": true, "errors": [], "index": 1},
+#     {"valid": false, "errors": [...], "index": 2}
+#   ]
+# }
 ```
 
 #### `openapi_get_schema`

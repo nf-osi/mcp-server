@@ -504,7 +504,7 @@ async def list_tools() -> list[Tool]:
             ),
             Tool(
                 name="openapi_validate",
-                description="Validate a JSON payload against a schema from the OpenAPI spec",
+                description="Validate JSON payload(s) against a schema from the OpenAPI spec. Accepts a single object or an array of objects for batch validation.",
                 inputSchema={
                     "type": "object",
                     "properties": {
@@ -513,8 +513,7 @@ async def list_tools() -> list[Tool]:
                             "description": "Name of the schema from #/components/schemas"
                         },
                         "payload": {
-                            "type": "object",
-                            "description": "The JSON payload to validate"
+                            "description": "A single JSON object or an array of JSON objects to validate"
                         }
                     },
                     "required": ["schema_name", "payload"]
@@ -1403,7 +1402,10 @@ async def openapi_list_schemas(args: dict) -> list[TextContent]:
 
 
 async def openapi_validate(args: dict) -> list[TextContent]:
-    """Validate a JSON payload against a schema from the OpenAPI spec."""
+    """Validate JSON payload(s) against a schema from the OpenAPI spec.
+
+    Accepts either a single object or an array of objects for batch validation.
+    """
     schema_name = args.get("schema_name")
     payload = args.get("payload")
 
@@ -1418,7 +1420,28 @@ async def openapi_validate(args: dict) -> list[TextContent]:
             text=json.dumps({"error": "payload is required"})
         )]
 
-    result = validate_against_openapi_schema(payload, schema_name)
+    # Handle batch validation if payload is an array
+    if isinstance(payload, list):
+        results = []
+        all_valid = True
+        for i, item in enumerate(payload):
+            item_result = validate_against_openapi_schema(item, schema_name)
+            item_result["index"] = i
+            results.append(item_result)
+            if not item_result.get("valid", False):
+                all_valid = False
+
+        result = {
+            "batch": True,
+            "count": len(payload),
+            "all_valid": all_valid,
+            "valid_count": sum(1 for r in results if r.get("valid", False)),
+            "invalid_count": sum(1 for r in results if not r.get("valid", False)),
+            "results": results
+        }
+    else:
+        result = validate_against_openapi_schema(payload, schema_name)
+
     return [TextContent(type="text", text=json.dumps(result, indent=2))]
 
 
