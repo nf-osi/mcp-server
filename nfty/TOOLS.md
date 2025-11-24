@@ -180,6 +180,100 @@ Retrieve Data Sharing Plan document for a study.
 **API Endpoint:** https://dsp.nf.synapse.org/api/dsp/json/{study_id}
 
 
+---
+
+### 🔍 OpenAPI Validation Tools (Optional)
+Available when `OPENAPI_SPEC_URI` environment variable is set at server startup. Useful for validating JSON payloads against an OpenAPI specification.
+
+**Configuration:**
+```bash
+# Load from local file
+export OPENAPI_SPEC_URI="/path/to/openapi.yaml"
+
+# Or load from URL
+export OPENAPI_SPEC_URI="https://example.com/openapi.json"
+```
+
+Supports both YAML and JSON formats.
+
+#### `openapi_get_spec`
+Get the full OpenAPI specification document.
+
+**Parameters:** None
+
+**Returns:** The complete OpenAPI spec with URI
+
+**Example:**
+```json
+{
+  "spec_uri": "https://example.com/openapi.json",
+  "spec": {
+    "openapi": "3.0.0",
+    "info": {...},
+    "paths": {...},
+    "components": {...}
+  }
+}
+```
+
+#### `openapi_list_schemas`
+List all available schemas defined in the loaded OpenAPI spec.
+
+**Parameters:** None
+
+**Returns:** List of schema names with count and spec URI
+
+**Example:**
+```json
+{
+  "spec_uri": "https://example.com/openapi.json",
+  "schemas": ["User", "Order", "Product"],
+  "count": 3
+}
+```
+
+#### `openapi_validate`
+Validate a JSON payload against a schema from the OpenAPI spec.
+
+**Parameters:**
+- `schema_name` (string, required) - Name of the schema from `#/components/schemas`
+- `payload` (object, required) - The JSON payload to validate
+
+**Returns:** Validation result with errors if invalid
+
+**Examples:**
+```python
+# Valid payload
+openapi_validate({
+  "schema_name": "User",
+  "payload": {"id": 1, "name": "John"}
+})
+# Returns: {"valid": true, "errors": []}
+
+# Invalid payload
+openapi_validate({
+  "schema_name": "User",
+  "payload": {"id": "not-an-int"}
+})
+# Returns: {"valid": false, "errors": [{"path": "/id", "message": "'not-an-int' is not of type 'integer'", ...}]}
+```
+
+#### `openapi_get_schema`
+Get the full schema definition for a named schema.
+
+**Parameters:**
+- `schema_name` (string, required) - Name of the schema from `#/components/schemas`
+
+**Returns:** Complete JSON schema definition
+
+**Example:**
+```python
+openapi_get_schema({"schema_name": "User"})
+# Returns the full schema with type, properties, required fields, etc.
+```
+
+---
+
 ## Error Handling
 
 All tools return errors in a consistent format:
