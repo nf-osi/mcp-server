@@ -1,0 +1,174 @@
+version: 1.0.0
+title: OpenAPI Tools Tester
+description: Test agent to verify the OpenAPI validation tools in the nfty MCP server
+instructions: You are a testing agent designed to systematically verify all OpenAPI tools are functioning correctly.
+prompt: |
+  Your goal is to test ALL OpenAPI tools available in the nfty MCP server to ensure they are working correctly.
+
+  Test OpenAPI Spec: {{ specUri }}
+
+  IMPORTANT NOTES:
+  - These tools are only available when OPENAPI_SPEC_URI environment variable is set
+  - Capture both successful and failed test results
+  - For each tool, document actual output (at least a sample)
+  - Note any warnings or unexpected behaviors even if test passes
+  - Be thorough but avoid excessive data dumps in the report
+
+  AVAILABLE TOOLS:
+
+  OpenAPI Validation Tools:
+  - openapi_list_schemas: List all available schemas in the loaded OpenAPI spec
+  - openapi_validate: Validate a JSON payload against a schema from the OpenAPI spec
+  - openapi_get_schema: Get the full schema definition for a named schema
+
+  TEST WORKFLOW:
+
+  1. SPEC LOADING VERIFICATION
+     a. Test openapi_list_schemas:
+        - List all available schemas
+        - Verify spec_uri matches {{ specUri }}
+        - Verify count > 0
+        - Note the schema names available for subsequent tests
+
+  2. SCHEMA RETRIEVAL TESTING
+     a. Test openapi_get_schema with valid schema:
+        - Pick the first schema from the list
+        - Retrieve its full definition
+        - Verify it contains expected properties (type, properties, etc.)
+
+     b. Test openapi_get_schema with multiple schemas:
+        - Retrieve 2-3 different schemas
+        - Compare their structures
+        - Note any schemas with $ref references
+
+     c. Test openapi_get_schema with invalid schema name:
+        - Try to get a non-existent schema: "NonExistentSchema12345"
+        - Verify appropriate error is returned
+        - Confirm error includes list of available schemas
+
+  3. VALIDATION TESTING
+     a. Test openapi_validate with valid payload:
+        - Choose a schema with required fields
+        - Create a minimal valid payload that satisfies requirements
+        - Validate and confirm {"valid": true, "errors": []}
+
+     b. Test openapi_validate with missing required fields:
+        - Use the same schema but omit required fields
+        - Validate and confirm {"valid": false, ...}
+        - Verify error message mentions missing required property
+
+     c. Test openapi_validate with wrong types:
+        - Create payload with incorrect types (string where integer expected, etc.)
+        - Validate and confirm type error is caught
+        - Verify error path points to correct location
+
+     d. Test openapi_validate with extra fields:
+        - Add unexpected fields to a valid payload
+        - Note whether validation passes (depends on additionalProperties setting)
+
+     e. Test openapi_validate with nested objects:
+        - If schemas have $ref references to other schemas
+        - Test that nested validation works correctly
+
+  4. ERROR HANDLING TESTING
+     a. Test openapi_validate with missing schema_name:
+        - Call validate without schema_name parameter
+        - Verify appropriate error message
+
+     b. Test openapi_validate with missing payload:
+        - Call validate without payload parameter
+        - Verify appropriate error message
+
+     c. Test openapi_get_schema with missing schema_name:
+        - Call get_schema without schema_name parameter
+        - Verify appropriate error message
+
+  5. GENERATE TEST REPORT
+     Create a comprehensive markdown test report: `openapi_tools_test_report.md`
+     ```markdown
+     # OpenAPI Tools Test Report
+
+     **Test Date:** <date>
+     **Spec URI:** {{ specUri }}
+     **Total Schemas:** <count>
+
+     ## Test Results Summary
+
+     | Tool Name | Status | Notes |
+     |-----------|--------|-------|
+     | openapi_list_schemas | ✓/✗ | ... |
+     | openapi_get_schema | ✓/✗ | ... |
+     | openapi_validate | ✓/✗ | ... |
+
+     ## Validation Tests
+
+     | Test Case | Schema | Input | Expected | Actual | Status |
+     |-----------|--------|-------|----------|--------|--------|
+     | Valid payload | ... | ... | valid: true | ... | ✓/✗ |
+     | Missing required | ... | ... | valid: false | ... | ✓/✗ |
+     | Wrong type | ... | ... | valid: false | ... | ✓/✗ |
+
+     ## Schemas Tested
+
+     <List schemas used in testing with brief description>
+
+     ## Overall Assessment
+
+     - **Total Tools:** 3
+     - **Tools Passing:** <count>
+     - **Tools Failing:** <count>
+
+     ## Issues Discovered
+
+     <List any bugs, unexpected behaviors, or issues found during testing>
+
+     ## Recommendations
+
+     <Suggest any improvements to error handling, documentation, or functionality>
+
+     ## Test Environment
+
+     - MCP Server: nfty
+     - OpenAPI Spec: {{ specUri }}
+     - Test Runner: <your identity/version>
+     ```
+
+activities:
+- Test openapi_list_schemas tool
+- Test openapi_get_schema with valid and invalid schema names
+- Test openapi_validate with valid payloads
+- Test openapi_validate with invalid payloads (missing required, wrong types)
+- Test openapi_validate with nested objects and $ref
+- Test error handling for missing parameters
+- Generate comprehensive test report in markdown
+
+extensions:
+- type: stdio
+  name: nfty
+  cmd: uvx
+  args:
+    - --from
+    - .
+    - nfty
+  env:
+    OPENAPI_SPEC_URI: https://petstore3.swagger.io/api/v3/openapi.json
+  env_keys: []
+  available_tools:
+    - openapi_list_schemas
+    - openapi_validate
+    - openapi_get_schema
+
+settings:
+  goose_provider: google
+  goose_model: gemini-2.5-pro
+  temperature: 0.0
+
+parameters:
+- key: specUri
+  input_type: string
+  requirement: optional
+  default: https://petstore3.swagger.io/api/v3/openapi.json
+  description: URL or file path to the OpenAPI specification to test against
+
+author:
+  contact: avu
