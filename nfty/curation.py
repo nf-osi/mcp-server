@@ -9,6 +9,12 @@ the type hints and the description from the docstring, which is why neither is
 written out by hand any more. A tool reports failure by raising ToolError;
 returning an error string would make a failure indistinguishable from an answer
 that happens to begin with the word "Error".
+
+Every tool below is a plain `def`, not `async def`: none of them actually
+await anything, they all call blocking synapseclient/requests methods, and
+MCPServer only runs a sync tool on a worker thread (anyio.to_thread.run_sync).
+Declaring one `async def` would have it awaited straight on the event loop
+instead, blocking every other in-flight request under streamable-http.
 """
 
 import json
@@ -21,7 +27,7 @@ from pathlib import Path
 import pandas as pd
 import numpy as np
 import synapseclient
-from synapseclient.core.exceptions import SynapseHTTPError
+from synapseclient.core.exceptions import SynapseHTTPError, SynapseNoCredentialsError
 import requests
 import jsonschema
 from mcp.server.mcpserver.exceptions import ToolError
@@ -81,30 +87,36 @@ class RedirectStdout:
 
 
 def get_synapse_client():
-    """Get or create Synapse client using SYNAPSE_AUTH_TOKEN environment variable
+    """Get or create a Synapse client, authenticated via synapseclient's own credential chain
 
-    Requires: SYNAPSE_AUTH_TOKEN environment variable to be set
+    That chain checks, in order: ~/.synapseConfig, the SYNAPSE_AUTH_TOKEN
+    environment variable, then AWS SSM Parameter Store. Delegating to it
+    (rather than only ever reading SYNAPSE_AUTH_TOKEN ourselves) is what makes
+    a config-file-only setup work.
     """
     global syn
     if syn is None:
-        auth_token = os.environ.get('SYNAPSE_AUTH_TOKEN')
-        if not auth_token:
-            raise ValueError(
-                "SYNAPSE_AUTH_TOKEN environment variable not set. "
-                "Get your token from https://www.synapse.org/ -> Account Settings -> Personal Access Tokens"
-            )
-
-        logger.info("Authenticating with Synapse using SYNAPSE_AUTH_TOKEN")
+        logger.info("Authenticating with Synapse")
 
         # Redirect stdout to prevent synapseclient from corrupting MCP protocol
         with RedirectStdout():
             # Create Synapse client with all output suppression flags
-            syn = synapseclient.Synapse(
+            client = synapseclient.Synapse(
                 silent=True,           # Suppress messages
                 skip_checks=True,      # Skip version and endpoint checks
                 debug=False            # Disable debug output
             )
-            syn.login(authToken=auth_token, silent=True)
+            try:
+                client.login(silent=True)
+            except SynapseNoCredentialsError as e:
+                raise ValueError(
+                    "No Synapse credentials found. Set the SYNAPSE_AUTH_TOKEN "
+                    "environment variable or configure ~/.synapseConfig. Get a "
+                    "token from https://www.synapse.org/ -> Account Settings -> "
+                    "Personal Access Tokens"
+                ) from e
+
+        syn = client
 
     return syn
 
@@ -160,10 +172,49 @@ def get_study_fileview_id(entity_or_id: Any, syn_client: Optional[synapseclient.
     return None
 
 
+def walk_folders(syn_client: synapseclient.Synapse,
+                  container_id: str,
+                  max_depth: Optional[int] = None) -> List[Dict[str, Any]]:
+    """Recursively list every folder under `container_id`, not including it.
+
+    Shared by create_dataset (which only needs the ids) and walk_project_tree
+    (which also wants path and depth), so there is one place that walks a
+    folder tree instead of two.
+    """
+    folders: List[Dict[str, Any]] = []
+
+    def _walk(current_id: str, depth: int, path: str) -> None:
+        if max_depth is not None and depth > max_depth:
+            return
+        for child in syn_client.getChildren(current_id, includeTypes=["folder"]):
+            child_path = f"{path}/{child['name']}" if path else child["name"]
+            folders.append({**child, "depth": depth, "path": child_path})
+            _walk(child["id"], depth + 1, child_path)
+
+    _walk(container_id, 0, "")
+    return folders
+
+
+def walk_files(syn_client: synapseclient.Synapse, container_id: str) -> List[Dict[str, Any]]:
+    """Recursively list every file under `container_id`, descending through all subfolders."""
+    files: List[Dict[str, Any]] = []
+
+    def _walk(current_id: str) -> None:
+        for child in syn_client.getChildren(current_id, includeTypes=["folder", "file"]):
+            child_type = (child.get("type") or "").lower()
+            if child_type.endswith("folder"):
+                _walk(child["id"])
+            elif child_type.endswith("fileentity") or child_type == "file":
+                files.append(child)
+
+    _walk(container_id)
+    return files
+
+
 # Create MCP server
 
 
-async def synapse_query(table_id: str, query: str) -> dict:
+def synapse_query(table_id: str, query: str) -> dict:
     """Execute Synapse SQL query"""
     try:
         query = query.replace("<table_id>", table_id)
@@ -324,15 +375,11 @@ def fetch_schema_json(schema_url: str) -> dict:
     return response.json()
 
 
-async def fetch_schema(schema_name: str = DEFAULT_SCHEMA_NAME,
-                       schema_url: Optional[str] = None) -> dict:
-    """Fetch a schema from the metadata dictionary and return it.
+def fetch_schema(schema_name: str = DEFAULT_SCHEMA_NAME,
+                  schema_url: Optional[str] = None) -> dict:
+    """Fetch a schema directly from the metadata dictionary repo and return it.
 
-    The schema is returned rather than written anywhere. It used to be possible
-    to save it to a path the caller named, which made this tool and
-    validate_metadata communicate through the local filesystem: state held
-    between two calls, which only works when the client and the server share a
-    machine, and which the 2026-07-28 revision removed from the protocol.
+    The schema is returned rather than written anywhere to be compatible with 2026-07-28 spec.
     """
     schema_url = resolve_schema_url(schema_name, schema_url)
     try:
@@ -341,10 +388,10 @@ async def fetch_schema(schema_name: str = DEFAULT_SCHEMA_NAME,
         raise ToolError(f"Failed to fetch schema from {schema_url}: {str(e)}")
 
 
-async def validate_metadata(metadata: dict,
-                            schema: Optional[dict] = None,
-                            schema_name: Optional[str] = None,
-                            schema_url: Optional[str] = None) -> dict:
+def validate_metadata(metadata: dict,
+                       schema: Optional[dict] = None,
+                       schema_name: Optional[str] = None,
+                       schema_url: Optional[str] = None) -> dict:
     """Validate metadata against a schema supplied by the caller.
 
     Takes either the schema itself, as fetch_schema returns it, or the name of
@@ -375,9 +422,15 @@ async def validate_metadata(metadata: dict,
     try:
         jsonschema.validate(instance=metadata, schema=schema)
 
-        # Calculate completeness
-        total_fields = len(schema.get("properties", {}))
-        filled_fields = len([k for k in metadata.keys() if metadata[k] is not None])
+        # Calculate completeness. Counting metadata keys directly would let
+        # fields outside the schema (typos, deprecated fields) inflate the
+        # ratio past 1.0, so only schema properties count as fillable.
+        schema_properties = schema.get("properties", {})
+        total_fields = len(schema_properties)
+        filled_fields = len([
+            k for k in schema_properties
+            if k in metadata and metadata[k] is not None
+        ])
         completeness = filled_fields / total_fields if total_fields > 0 else 0
 
         result = {
@@ -411,9 +464,9 @@ async def validate_metadata(metadata: dict,
         return result
 
 
-async def create_dataset(folder_id: str,
-                         name: Optional[str] = None,
-                         parent_id: Optional[str] = None) -> dict:
+def create_dataset(folder_id: str,
+                    name: Optional[str] = None,
+                    parent_id: Optional[str] = None) -> dict:
     """Create a Dataset entity from a Folder"""
     from synapseclient import Dataset
 
@@ -448,16 +501,8 @@ async def create_dataset(folder_id: str,
                 except (TypeError, ValueError):
                     return None
 
-        def gather_folder_ids(container_id: str, bucket: Optional[List[str]] = None) -> List[str]:
-            if bucket is None:
-                bucket = []
-            bucket.append(container_id)
-            for child in syn_client.getChildren(container_id, includeTypes=["folder"]):
-                gather_folder_ids(child["id"], bucket)
-            return bucket
-
         def collect_via_view(view_id: str) -> List[Dict[str, Any]]:
-            folder_ids = gather_folder_ids(folder_id)
+            folder_ids = [folder_id] + [f["id"] for f in walk_folders(syn_client, folder_id)]
             dataset_map: Dict[str, Dict[str, Any]] = {}
             batch_size = 200
 
@@ -509,38 +554,30 @@ async def create_dataset(folder_id: str,
 
         def collect_by_traversal(container_id: str) -> List[Dict[str, Any]]:
             items: List[Dict[str, Any]] = []
-
-            def _walk(current_id: str) -> None:
-                for child in syn_client.getChildren(current_id, includeTypes=["folder", "file"]):
-                    child_type = (child.get("type") or "").lower()
-                    if child_type.endswith("fileentity") or child_type == "file":
-                        version_number = child.get("versionNumber")
-                        if version_number is None:
-                            try:
-                                file_entity = syn_client.get(child["id"], downloadFile=False)
-                                version_number = getattr(file_entity, "versionNumber", None)
-                            except Exception as version_err:
-                                logger.warning(
-                                    "Unable to fetch version for %s: %s",
-                                    child["id"],
-                                    version_err,
-                                )
-
-                        if version_number is None:
-                            raise ValueError(
-                                f"Could not determine version number for file {child['id']}"
-                            )
-
-                        items.append(
-                            {
-                                "entityId": child["id"],
-                                "versionNumber": int(version_number),
-                            }
+            for child in walk_files(syn_client, container_id):
+                version_number = child.get("versionNumber")
+                if version_number is None:
+                    try:
+                        file_entity = syn_client.get(child["id"], downloadFile=False)
+                        version_number = getattr(file_entity, "versionNumber", None)
+                    except Exception as version_err:
+                        logger.warning(
+                            "Unable to fetch version for %s: %s",
+                            child["id"],
+                            version_err,
                         )
-                    elif child_type.endswith("folder"):
-                        _walk(child["id"])
 
-            _walk(container_id)
+                if version_number is None:
+                    raise ValueError(
+                        f"Could not determine version number for file {child['id']}"
+                    )
+
+                items.append(
+                    {
+                        "entityId": child["id"],
+                        "versionNumber": int(version_number),
+                    }
+                )
             return items
 
         dataset_items: List[Dict[str, Any]] = []
@@ -611,7 +648,7 @@ async def create_dataset(folder_id: str,
         raise ToolError(f"Unexpected error creating dataset from folder {folder_id}: {str(e)}")
 
 
-async def submit_metadata(entity_id: str, metadata: dict) -> dict:
+def submit_metadata(entity_id: str, metadata: dict) -> dict:
     """Submit metadata by adding annotations to any Synapse entity"""
 
     logger.info(f"Submitting metadata for {entity_id} as Synapse annotations")
@@ -667,7 +704,7 @@ async def submit_metadata(entity_id: str, metadata: dict) -> dict:
 # PROJECT REVIEW TOOLS
 # ============================================================================
 
-async def get_data_classes(templates_url: str = DATA_TEMPLATES_URL) -> str:
+def get_data_classes(templates_url: str = DATA_TEMPLATES_URL) -> str:
     """Fetch data class templates"""
 
     try:
@@ -680,8 +717,8 @@ async def get_data_classes(templates_url: str = DATA_TEMPLATES_URL) -> str:
         raise ToolError(f"Failed to fetch data classes: {str(e)}")
 
 
-async def get_project_children(entity_id: str,
-                               include_types: Optional[List[str]] = None) -> dict:
+def get_project_children(entity_id: str,
+                          include_types: Optional[List[str]] = None) -> dict:
     """Get immediate children of a container"""
     include_types = include_types or ["folder", "file"]
 
@@ -709,7 +746,7 @@ async def get_project_children(entity_id: str,
         raise ToolError(f"Failed to get children: {str(e)}")
 
 
-async def get_entity_info(entity_id: str, include_annotations: bool = True) -> dict:
+def get_entity_info(entity_id: str, include_annotations: bool = True) -> dict:
     """Get detailed entity information"""
 
     try:
@@ -744,31 +781,16 @@ async def get_entity_info(entity_id: str, include_annotations: bool = True) -> d
         raise ToolError(f"Failed to get entity info: {str(e)}")
 
 
-async def walk_project_tree(project_id: str, max_depth: int = 5) -> dict:
+def walk_project_tree(project_id: str, max_depth: int = 5) -> dict:
     """Recursively walk project structure"""
 
     try:
         syn_client = get_synapse_client()
 
-        def walk_folder(folder_id, depth=0, path=""):
-            if depth > max_depth:
-                return []
-
-            folders = []
-            for child in syn_client.getChildren(folder_id, includeTypes=["folder"]):
-                child_path = f"{path}/{child['name']}" if path else child['name']
-                folders.append({
-                    "id": child["id"],
-                    "name": child["name"],
-                    "path": child_path,
-                    "depth": depth
-                })
-                # Recursively get subfolders
-                folders.extend(walk_folder(child["id"], depth + 1, child_path))
-
-            return folders
-
-        all_folders = walk_folder(project_id)
+        all_folders = [
+            {"id": f["id"], "name": f["name"], "path": f["path"], "depth": f["depth"]}
+            for f in walk_folders(syn_client, project_id, max_depth=max_depth)
+        ]
 
         result = {
             "project_id": project_id,
@@ -782,7 +804,7 @@ async def walk_project_tree(project_id: str, max_depth: int = 5) -> dict:
         raise ToolError(f"Failed to walk project tree: {str(e)}")
 
 
-async def count_folder_contents(folder_id: str) -> dict:
+def count_folder_contents(folder_id: str) -> dict:
     """Count contents of a folder"""
 
     try:
@@ -808,7 +830,7 @@ async def count_folder_contents(folder_id: str) -> dict:
 # FREQUENTLY SHARED TOOLS
 # ============================================================================
 
-async def get_data_sharing_plan(study_id: str) -> dict:
+def get_data_sharing_plan(study_id: str) -> dict:
     """Retrieve Data Sharing Plan"""
     url = f"https://dsp.nf.synapse.org/api/dsp/json/{study_id}"
 

@@ -6,6 +6,7 @@ server. The tool functions live in nfty/curation.py; this module builds the
 MCPServer instance and registers them onto it.
 """
 
+import os
 import sys
 
 from mcp.server.mcpserver import MCPServer
@@ -19,6 +20,8 @@ Two tools change things: create_dataset creates an entity, and submit_metadata
 overwrites an entity's annotations. Both are marked in their annotations;
 confirm with the user before calling either.
 """
+
+DEFAULT_TRANSPORT = "stdio"
 
 
 def create_server() -> MCPServer:
@@ -34,8 +37,27 @@ def create_server() -> MCPServer:
 
 
 def main() -> int:
-    """Entry point for the `nfty` command."""
-    create_server().run(transport="stdio")
+    """Entry point for the `nfty` command.
+
+    Transport is chosen via MCP_TRANSPORT: "stdio" (the default) for a local
+    client, or "streamable-http" to serve over HTTP. HTTP mode runs stateless
+    (2026-07-28 spec) since these tools keep no session state between calls,
+    which is what lets a deployment sit behind a load balancer without sticky
+    sessions.
+    """
+    transport = os.environ.get("MCP_TRANSPORT", DEFAULT_TRANSPORT)
+    server = create_server()
+
+    if transport == "streamable-http":
+        server.run(
+            transport="streamable-http",
+            host=os.environ.get("MCP_HOST", "127.0.0.1"),
+            port=int(os.environ.get("MCP_PORT", "8000")),
+            stateless_http=True,
+        )
+    else:
+        server.run(transport=transport)
+
     return 0
 
 
