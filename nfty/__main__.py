@@ -40,10 +40,9 @@ def main() -> int:
     """Entry point for the `nfty` command.
 
     Transport is chosen via MCP_TRANSPORT: "stdio" (the default) for a local
-    client, or "streamable-http" to serve over HTTP. HTTP mode runs stateless
-    (2026-07-28 spec) since these tools keep no session state between calls,
-    which is what lets a deployment sit behind a load balancer without sticky
-    sessions.
+    client, or "streamable-http" to serve over HTTP. HTTP mode runs stateless,
+    since these tools keep no state between calls, so it can run behind a
+    load balancer without sticky sessions.
     """
     transport = os.environ.get("MCP_TRANSPORT", DEFAULT_TRANSPORT)
     server = create_server()

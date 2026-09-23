@@ -3,18 +3,14 @@
 
 These register onto a server rather than owning one: nfty/__main__.py builds
 the MCPServer instance and calls register_curation_tools(mcp) to add them.
+A tool reports failure by raising ToolError; returning an error string would
+make a failure indistinguishable from an answer that happens to begin with
+the word "Error".
 
-Each function's signature is its schema: MCPServer derives the JSON Schema from
-the type hints and the description from the docstring, which is why neither is
-written out by hand any more. A tool reports failure by raising ToolError;
-returning an error string would make a failure indistinguishable from an answer
-that happens to begin with the word "Error".
-
-Every tool below is a plain `def`, not `async def`: none of them actually
-await anything, they all call blocking synapseclient/requests methods, and
-MCPServer only runs a sync tool on a worker thread (anyio.to_thread.run_sync).
-Declaring one `async def` would have it awaited straight on the event loop
-instead, blocking every other in-flight request under streamable-http.
+Every tool below is a plain `def`, not `async def`. They all call blocking
+synapseclient/requests methods without awaiting anything, and MCPServer only
+offloads a sync tool to a worker thread; an `async def` would run directly on
+the event loop and block every other in-flight request under streamable-http.
 """
 
 import json
@@ -377,10 +373,7 @@ def fetch_schema_json(schema_url: str) -> dict:
 
 def fetch_schema(schema_name: str = DEFAULT_SCHEMA_NAME,
                   schema_url: Optional[str] = None) -> dict:
-    """Fetch a schema directly from the metadata dictionary repo and return it.
-
-    The schema is returned rather than written anywhere to be compatible with 2026-07-28 spec.
-    """
+    """Fetch a schema directly from the metadata dictionary repo and return it."""
     schema_url = resolve_schema_url(schema_name, schema_url)
     try:
         return fetch_schema_json(schema_url)
@@ -394,15 +387,11 @@ def validate_metadata(metadata: dict,
                        schema_url: Optional[str] = None) -> dict:
     """Validate metadata against a schema supplied by the caller.
 
-    Takes either the schema itself, as fetch_schema returns it, or the name of
-    one to fetch, so validating against a registered schema costs one call
-    rather than two and does not round-trip the schema through the agent. An
-    explicit schema wins over a name, the same precedence fetch_schema applies
-    between a URL and a name.
-
-    It used to take a path to a file fetch_schema had written, which made the
-    two tools communicate through the local filesystem rather than through
-    their arguments.
+    Accepts either the schema itself, as returned by fetch_schema, or the
+    name of a registered schema to fetch, so validating against a registered
+    schema costs a single call. An explicit schema takes precedence over a
+    name, the same precedence resolve_schema_url applies between a URL and a
+    name.
     """
     if schema is None:
         if not (schema_name or schema_url):
