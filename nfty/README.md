@@ -11,10 +11,7 @@ This server provides tools for two main workflows:
 Both workflows use the same MCP server but access different subsets of tools via the `available_tools` configuration in their respective recipes.
 
 Built on `mcp>=2.2` (MCPServer, the FastMCP 2.0 rename) and the MCP 2026-07-28
-spec's stateless server model: every tool's JSON Schema comes from its
-function signature and docstring rather than hand-written definitions, and
-the server holds no session state between calls, so it can run behind a
-load balancer with no sticky sessions.
+spec's stateless server model.
 
 ## Installation
 
