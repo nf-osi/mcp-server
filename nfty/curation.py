@@ -1,11 +1,10 @@
 #!/usr/bin/env python3
 """Curation tools: Synapse metadata generation, submission, and project review.
 
-These register onto a server rather than owning one: nfty/__main__.py builds
-the MCPServer instance and calls register_curation_tools(mcp) to add them.
-A tool reports failure by raising ToolError; returning an error string would
-make a failure indistinguishable from an answer that happens to begin with
-the word "Error".
+These register onto a server built elsewhere: nfty/__main__.py owns the
+MCPServer instance and calls register_curation_tools(mcp) to add them. Tools
+raise ToolError on failure rather than returning an error string, which
+would be indistinguishable from a legitimate answer.
 
 Every tool below is a plain `def`, not `async def`. They all call blocking
 synapseclient/requests methods without awaiting anything, and MCPServer only
