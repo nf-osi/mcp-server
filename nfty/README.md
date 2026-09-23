@@ -10,6 +10,12 @@ This server provides tools for two main workflows:
 
 Both workflows use the same MCP server but access different subsets of tools via the `available_tools` configuration in their respective recipes.
 
+Built on `mcp>=2.2` (MCPServer, the FastMCP 2.0 rename) and the MCP 2026-07-28
+spec's stateless server model: every tool's JSON Schema comes from its
+function signature and docstring rather than hand-written definitions, and
+the server holds no session state between calls, so it can run behind a
+load balancer with no sticky sessions.
+
 ## Installation
 
 ### Using uvx (Recommended)
@@ -41,11 +47,23 @@ pip install -e .
 
 ### Required Environment Variables
 
-**Synapse Authentication:**
+**Synapse Authentication**, one of:
 ```bash
 export SYNAPSE_AUTH_TOKEN="your-synapse-token"
 ```
-Get your token from: https://www.synapse.org/ → Account Settings → Personal Access Tokens
+or a `~/.synapseConfig` file with a personal access token — the server checks
+both (via synapseclient's own credential chain, which also supports AWS SSM
+Parameter Store). Get a token from: https://www.synapse.org/ → Account Settings → Personal Access Tokens
+
+### Optional Environment Variables
+
+**Transport** (defaults to `stdio`, for a local MCP client):
+```bash
+export MCP_TRANSPORT="streamable-http"  # or "stdio" (default)
+export MCP_HOST="127.0.0.1"             # streamable-http only, default 127.0.0.1
+export MCP_PORT="8000"                  # streamable-http only, default 8000
+```
+See [Transports](#transports) below.
 
 ## Available Tools
 
@@ -107,6 +125,27 @@ extensions:
     - submit_metadata
 ```
 
+## Transports
+
+**stdio** (default) is how the examples above and the Goose recipes run the
+server: the client spawns `nfty` as a subprocess and speaks MCP over its
+stdin/stdout.
+
+**streamable-http** runs the server as an HTTP service instead, for clients
+that connect over the network rather than spawning a subprocess:
+
+```bash
+export SYNAPSE_AUTH_TOKEN="your-synapse-token"
+export MCP_TRANSPORT="streamable-http"
+export MCP_PORT="8000"
+nfty
+# now listening on http://127.0.0.1:8000/mcp
+```
+
+It runs stateless (no session tracking between requests), consistent with
+the 2026-07-28 spec's stateless server updates, so it's safe to run multiple
+replicas behind a load balancer without sticky sessions.
+
 ## Architecture
 
 The unified server provides domain-specific tools for Synapse data curation:
@@ -130,7 +169,7 @@ nfty
 ## Troubleshooting
 
 **Synapse Authentication Error**:
-- Ensure `SYNAPSE_AUTH_TOKEN` environment variable is set
+- Ensure `SYNAPSE_AUTH_TOKEN` is set, or `~/.synapseConfig` has a valid token
 - Verify token is valid at https://www.synapse.org/
 
 **Import Errors**:

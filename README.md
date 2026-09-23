@@ -16,6 +16,7 @@ Nifty tools for Synapse data curation workflows. Enables AI assistants to:
 **Status**: ✅ Production ready
 **Language**: Python 3.8+
 **Dependencies**: synapseclient, mcp, requests, jsonschema
+**Protocol**: MCP 2026-07-28 spec (stateless); runs over stdio (default) or streamable-http — see [nfty's README](nfty/README.md#transports)
 
 ### [memory](memory/) (Coming Soon)
 Institutional memory and knowledge base for NF-OSI. Preserves:
