@@ -16,12 +16,10 @@ Execute SQL queries against Synapse dataset tables to extract metadata.
 
 **Returns:** `{"row_count": ..., "columns": [...], "data": [...]}` on success.
 
-A `SELECT *` query is rejected before it runs unless it has a `LIMIT` or a
-`WHERE` clause; a `WHERE` clause that still returns more than 1000 rows gets
-the same guidance after the fact. Both cases, and any query Synapse itself
-rejects (e.g. an unknown column), come back as `{"error": ..., "message":
-...}` rather than a tool failure, since the query mechanism worked and it's
-the query the caller needs to fix.
+A `SELECT *` query raises `ToolError` before it runs unless it has a `LIMIT`
+or a `WHERE` clause; a `WHERE` clause that still returns more than 1000 rows
+gets the same treatment after the fact. Any query Synapse itself rejects
+(e.g. an unknown column) also raises `ToolError`.
 
 **Example:**
 ```python
@@ -207,9 +205,8 @@ Most tools raise `ToolError` on failure, which MCP surfaces as a tool-level
 error rather than a normal result — clients should treat these as failures,
 not answers to work with.
 
-A few tools return a result with an `error` key instead, because the error
-is itself part of the answer rather than a failed call:
-- `synapse_query` — a rejected or oversized `SELECT *`, or a query Synapse itself couldn't run
+Two tools return a result with an `error` key instead, because the error is
+itself part of the answer rather than a failed call:
 - `get_data_sharing_plan` — no DSP exists for the study (404)
 - `validate_metadata` — an invalid metadata/schema combination is a normal `"valid": false` result
 

@@ -226,11 +226,12 @@ def synapse_query(table_id: str, query: str) -> dict:
             # SELECT * without LIMIT is allowed if there's a WHERE clause
             # We'll check the result size after execution
             if not has_where:
-                return {
-                        "error": "SELECT * queries require a LIMIT clause or WHERE filter",
-                        "message": "Please add a LIMIT clause (e.g., LIMIT 100), a WHERE filter, or specify explicit column names",
-                        "reason": "SELECT * without LIMIT or WHERE can return excessive data and cause performance issues"
-                    }
+                raise ToolError(
+                    "SELECT * queries require a LIMIT clause or WHERE filter: "
+                    "add a LIMIT (e.g., LIMIT 100), a WHERE filter, or specify "
+                    "explicit column names. SELECT * without either can return "
+                    "excessive data."
+                )
 
         syn_client = get_synapse_client()
         logger.info(f"Executing query: {query}")
@@ -245,14 +246,12 @@ def synapse_query(table_id: str, query: str) -> dict:
 
         # Check if result set is too large for SELECT * without LIMIT
         if has_select_star and not has_limit and row_count > max_rows_without_limit:
-            return {
-                    "error": "Query returned too many rows",
-                    "row_count": row_count,
-                    "max_allowed": max_rows_without_limit,
-                    "message": f"Your WHERE filter returned {row_count} rows, which exceeds the maximum of {max_rows_without_limit} rows for SELECT * queries without LIMIT.",
-                    "suggestion": f"Please add a LIMIT clause (e.g., LIMIT {max_rows_without_limit}) or make your WHERE filter more selective to reduce the result set.",
-                    "query": query
-                }
+            raise ToolError(
+                f"Your WHERE filter returned {row_count} rows, which exceeds "
+                f"the maximum of {max_rows_without_limit} rows for SELECT * "
+                "queries without LIMIT. Add a LIMIT clause or make your WHERE "
+                "filter more selective."
+            )
 
         # Convert DataFrame to records, handling Synapse-specific types
         records = []
@@ -314,28 +313,20 @@ def synapse_query(table_id: str, query: str) -> dict:
 
         # Provide helpful context for column errors
         if "Unknown column" in error_detail or "no such column" in error_detail.lower():
-            return {
-                    "error": "Column not found",
-                    "message": error_detail,
-                    "suggestion": "Query 'SELECT * FROM <table_id> LIMIT 1' to see available columns"
-                }
+            raise ToolError(
+                f"{error_detail} Query 'SELECT * FROM <table_id> LIMIT 1' to "
+                "see available columns."
+            )
 
-        return {
-                "error": "Synapse query failed",
-                "message": error_detail
-            }
+        raise ToolError(f"Synapse query failed: {error_detail}")
     except json.JSONDecodeError as e:
         logger.error(f"JSON encoding error: {str(e)}", exc_info=True)
-        return {
-                "error": "JSON encoding failed",
-                "message": str(e)
-            }
+        raise ToolError(f"JSON encoding failed: {str(e)}")
+    except ToolError:
+        raise
     except Exception as e:
         logger.error(f"Query execution error: {str(e)}", exc_info=True)
-        return {
-                "error": "Query execution error",
-                "message": str(e)
-            }
+        raise ToolError(f"Query execution error: {str(e)}")
 
 
 DATA_TEMPLATES_URL = (
