@@ -14,7 +14,14 @@ Execute SQL queries against Synapse dataset tables to extract metadata.
 - `table_id` (string, required) - Synapse table ID (e.g., syn12345678)
 - `query` (string, required) - SQL query string (use `<table_id>` as placeholder)
 
-**Returns:** JSON with row_count, columns, and data
+**Returns:** `{"row_count": ..., "columns": [...], "data": [...]}` on success.
+
+A `SELECT *` query is rejected before it runs unless it has a `LIMIT` or a
+`WHERE` clause; a `WHERE` clause that still returns more than 1000 rows gets
+the same guidance after the fact. Both cases, and any query Synapse itself
+rejects (e.g. an unknown column), come back as `{"error": ..., "message":
+...}` rather than a tool failure, since the query mechanism worked and it's
+the query the caller needs to fix.
 
 **Example:**
 ```python
@@ -51,29 +58,38 @@ fetch_schema({"schema_url": "https://example.com/custom-schema.json"})
 - `PortalStudy` - Study-level metadata
 
 #### `validate_metadata`
-Validate metadata JSON against a saved schema file.
+Validate a metadata object against a JSON schema, either supplied directly or fetched by name/URL.
 
 **Parameters:**
-- `metadata` (object, required) - JSON metadata to validate
-- `schema_file` (string, required) - Path to saved schema file (e.g., "PortalDataset.json")
+- `metadata` (object, required) - Metadata to validate
+- `schema` (object, optional) - A schema object, e.g. as returned by `fetch_schema`
+- `schema_name` (string, optional) - Name of a registered schema to fetch (default: "PortalDataset")
+- `schema_url` (string, optional) - URL to fetch a schema from directly
 
-**Returns:** Validation results with errors, warnings, and completeness score
+At least one of `schema`, `schema_name`, or `schema_url` is required. An
+explicit `schema` takes precedence over fetching one; between `schema_name`
+and `schema_url`, the URL wins.
+
+**Returns:** `{"valid": bool, "errors": [...], "warnings": [...], "completeness": float, "filled_fields": int, "total_fields": int}`.
+`completeness` is the fraction of the schema's own properties that are
+present and non-null in `metadata` — fields outside the schema don't count
+toward it, so it never exceeds 1.0.
 
 **Example:**
 ```python
-# First, fetch and save the schema
-fetch_schema({"save_to_file": "PortalDataset.json"})
-
-# Then validate metadata using the saved schema
+# Validate directly against a named schema
 validate_metadata({
   "metadata": {...},
-  "schema_file": "PortalDataset.json"
+  "schema_name": "PortalDataset"
 })
+
+# Or fetch once and validate several records against the same schema object
+schema = fetch_schema({"schema_name": "PortalDataset"})
+validate_metadata({"metadata": record_1, "schema": schema})
+validate_metadata({"metadata": record_2, "schema": schema})
 ```
 
-**Workflow:** Always fetch and save the schema first, then reuse it for validating multiple datasets.
-
-#### `create_dataset`
+#### `create_dataset` ⚠️ writes to Synapse — creates an entity
 Create a Dataset entity from a Folder to enable SQL queries over the files.
 
 **Parameters:**
@@ -84,6 +100,11 @@ Create a Dataset entity from a Folder to enable SQL queries over the files.
 **Returns:** Dataset ID, name, source folder, and item count
 
 **Use Case:** When you need to query files within a Folder using SQL, first convert it to a Dataset entity. This is required because `synapse_query` only works with Dataset entities, not Folders.
+
+File versions are resolved from the folder's study file view when one is
+annotated on an ancestor (`studyFileviewId`), falling back to a recursive
+folder traversal otherwise. Raises `ToolError` if the folder and its
+subfolders contain no files.
 
 **Example:**
 ```python
@@ -96,7 +117,7 @@ create_dataset({
 # Now you can query: synapse_query({"table_id": "syn87654321", ...})
 ```
 
-#### `submit_metadata`
+#### `submit_metadata` ⚠️ writes to Synapse — overwrites annotations
 Submit validated metadata by adding annotations to any Synapse entity (dataset, file, folder, project, paper, etc.).
 
 **Parameters:**
@@ -145,7 +166,7 @@ Get detailed information about a Synapse entity including annotations.
 
 **Returns:** Entity details with metadata and annotations
 
-**Note:** This tool is also used by recipe_release.yaml as it provides more complete information than the basic version.
+**Note:** Also used by `recipe_release.yaml` for entity lookups during portal metadata generation.
 
 #### `walk_project_tree`
 Recursively traverse project structure to find all folders.
@@ -175,39 +196,43 @@ Retrieve Data Sharing Plan document for a study.
 **Parameters:**
 - `study_id` (string, required) - Synapse project ID
 
-**Returns:** Complete DSP JSON or error if not found
+**Returns:** Complete DSP JSON, or `{"error": "No DSP found for this study", "study_id": ...}` if none exists (404).
 
 **API Endpoint:** https://dsp.nf.synapse.org/api/dsp/json/{study_id}
 
 
 ## Error Handling
 
-All tools return errors in a consistent format:
+Most tools raise `ToolError` on failure, which MCP surfaces as a tool-level
+error rather than a normal result — clients should treat these as failures,
+not answers to work with.
 
-```json
-{
-  "error": "Error description",
-  "details": "Additional context"
-}
-```
+A few tools return a result with an `error` key instead, because the error
+is itself part of the answer rather than a failed call:
+- `synapse_query` — a rejected or oversized `SELECT *`, or a query Synapse itself couldn't run
+- `get_data_sharing_plan` — no DSP exists for the study (404)
+- `validate_metadata` — an invalid metadata/schema combination is a normal `"valid": false` result
 
-Common errors:
-- **Authentication**: SYNAPSE_AUTH_TOKEN not set or invalid
-- **Not Found**: Entity or resource doesn't exist
-- **Permission Denied**: User lacks access to resource
-- **Validation**: Metadata doesn't conform to schema
+Common failure causes:
+- **Authentication**: no Synapse credentials found (see below)
+- **Not Found**: entity or resource doesn't exist
+- **Permission Denied**: caller lacks access to the resource
 
 ---
 
 ## Authentication
 
-All Synapse tools require the `SYNAPSE_AUTH_TOKEN` environment variable:
+Synapse tools resolve credentials via synapseclient's own chain, in order: a
+`~/.synapseConfig` file, the `SYNAPSE_AUTH_TOKEN` environment variable, or
+AWS SSM Parameter Store.
 
 ```bash
 export SYNAPSE_AUTH_TOKEN="your-personal-access-token"
 ```
 
 Get your token from: https://www.synapse.org/ → Account Settings → Personal Access Tokens
+
+See [nfty's README](README.md#environment-setup) for transport and other deployment configuration.
 
 ---
 
@@ -216,7 +241,7 @@ Get your token from: https://www.synapse.org/ → Account Settings → Personal 
 ### Portal Metadata Workflow
 ```python
 # 1. Fetch schema
-fetch_schema({})
+schema = fetch_schema({})
 
 # 2. Get entity info
 get_entity_info({"entity_id": "syn51234567"})
@@ -227,10 +252,10 @@ synapse_query({
   "query": "SELECT DISTINCT species FROM <table_id>"
 })
 
-# 4. Validate metadata
+# 4. Validate metadata against the schema fetched in step 1
 validate_metadata({
   "metadata": {...},
-  "schema": {...}
+  "schema": schema
 })
 
 # 5. Submit metadata
