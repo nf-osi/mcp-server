@@ -472,8 +472,18 @@ async def create_dataset(folder_id: str,
                 query_result = syn_client.tableQuery(sql)
                 rowset = query_result.asRowSet()
                 header_index = {header.name: idx for idx, header in enumerate(rowset.headers)}
-                id_idx = header_index.get("id") or header_index.get("entityId")
-                version_idx = header_index.get("currentVersion") or header_index.get("versionNumber")
+
+                def _column_index(*names: str) -> Optional[int]:
+                    # `a or b` would treat a legitimate index 0 as falsy and fall
+                    # through to `b`; the SQL above always puts 'id' first.
+                    for name in names:
+                        idx = header_index.get(name)
+                        if idx is not None:
+                            return idx
+                    return None
+
+                id_idx = _column_index("id", "entityId")
+                version_idx = _column_index("currentVersion", "versionNumber")
 
                 if id_idx is None or version_idx is None:
                     raise ValueError(
@@ -564,14 +574,10 @@ async def create_dataset(folder_id: str,
             dataset_items = collect_by_traversal(folder_id)
 
         if not dataset_items:
-            logger.error(f"No files found in folder {folder_id} or any of its subfolders")
-            result = {
-                "status": "failed",
-                "folder_id": folder_id,
-                "error": "No files located",
-                "message": "Folder and subfolders do not contain any files to include in the dataset"
-            }
-            return result
+            raise ToolError(
+                f"No files found in folder {folder_id} or any of its subfolders; "
+                "a Dataset needs at least one file to include"
+            )
 
         # Create the Dataset entity
         dataset = Dataset(
@@ -598,23 +604,11 @@ async def create_dataset(folder_id: str,
         return result
 
     except SynapseHTTPError as e:
-        logger.error(f"Failed to create dataset: {str(e)}")
-        result = {
-            "status": "failed",
-            "folder_id": folder_id,
-            "error": str(e),
-            "message": "Failed to create dataset from folder"
-        }
-        return result
+        raise ToolError(f"Failed to create dataset from folder {folder_id}: {str(e)}")
+    except ToolError:
+        raise
     except Exception as e:
-        logger.error(f"Unexpected error creating dataset: {str(e)}")
-        result = {
-            "status": "failed",
-            "folder_id": folder_id,
-            "error": str(e),
-            "message": "Unexpected error during dataset creation"
-        }
-        return result
+        raise ToolError(f"Unexpected error creating dataset from folder {folder_id}: {str(e)}")
 
 
 async def submit_metadata(entity_id: str, metadata: dict) -> dict:
@@ -664,23 +658,9 @@ async def submit_metadata(entity_id: str, metadata: dict) -> dict:
         return result
 
     except SynapseHTTPError as e:
-        logger.error(f"Failed to submit metadata: {str(e)}")
-        result = {
-            "status": "failed",
-            "entity_id": entity_id,
-            "error": str(e),
-            "message": "Failed to add annotations to Synapse entity"
-        }
-        return result
+        raise ToolError(f"Failed to add annotations to {entity_id}: {str(e)}")
     except Exception as e:
-        logger.error(f"Unexpected error during submission: {str(e)}")
-        result = {
-            "status": "failed",
-            "entity_id": entity_id,
-            "error": str(e),
-            "message": "Unexpected error during metadata submission"
-        }
-        return result
+        raise ToolError(f"Unexpected error submitting metadata for {entity_id}: {str(e)}")
 
 
 # ============================================================================
