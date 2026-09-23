@@ -15,7 +15,11 @@ authors = [
 keywords = ["mcp", "synapse", "curation", "neurofibromatosis"]
 
 dependencies = [
-    "mcp>=0.9.0",
+    # 2.x for MCPServer (FastMCP's 2.0 rename): mcp.add_tool derives each
+    # tool's JSON Schema from its function signature and its description from
+    # the docstring, replacing the hand-written Tool definitions and the
+    # list_tools/call_tool dispatch this server used before.
+    "mcp>=2.2,<3",
     "synapseclient>=4.0.0",
     "requests>=2.31.0",
     "jsonschema>=4.19.0",
